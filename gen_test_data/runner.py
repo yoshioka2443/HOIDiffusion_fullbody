@@ -33,6 +33,8 @@ from gen_test_data.image_edit import resize_and_pad_image
 
 import cv2
 
+dataset_dir = '../datasets'
+
 def save_image(original_image, output_dir, filename="original.png"):
     """画像を保存します。"""
     plt.show()
@@ -86,18 +88,18 @@ class Runner:
 
     def load_background_image(self, sequence_name, frame_number):
         """背景画像を読み込みます。"""
-        image_path = f'data/HO3D_v3/train/{sequence_name}/rgb/{frame_number:04d}.jpg'
+        image_path = dataset_dir + f'/HO3D_v3/train/{sequence_name}/rgb/{frame_number:04d}.jpg'
         self.background_image = np.array(Image.open(image_path), dtype=np.float32) / 255.0
         # self.background_envmap = pyredner.EnvironmentMap(torch.tensor(self.background_image).to(pyredner.get_device()))
 
     def load_object_data(self, sequence_name, frame_number, replacement_object_name):
         """オブジェクトと手のデータを読み込みます。"""
-        meta_path = f'../dataset/HO3D_v3/train/{sequence_name}/meta/{frame_number:04d}.pkl'
+        meta_path = dataset_dir + f'/HO3D_v3/train/{sequence_name}/meta/{frame_number:04d}.pkl'
         with open(meta_path, 'rb') as f:
             data = pickle.load(f, encoding='latin1')
 
-        self.original_object_path = f"../dataset/models/{data['objName']}/textured_simple.obj"
-        self.replacement_object_path = f"../dataset/models/{replacement_object_name}/textured_simple.obj"
+        self.original_object_path = dataset_dir + f"/models/{data['objName']}/textured_simple.obj"
+        self.replacement_object_path = dataset_dir + f"/models/{replacement_object_name}/textured_simple.obj"
 
         # オブジェクトと手のパラメータ
         self.object_rotation_np = R.from_rotvec(data['objRot'].T[0]).as_matrix().astype(np.float32)

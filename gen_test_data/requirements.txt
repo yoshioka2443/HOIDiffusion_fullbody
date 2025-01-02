@@ -1,0 +1,38 @@
+# conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+# conda install -c conda-forge cmake make gcc_linux-64 gxx_linux-64
+# pip install git+https://github.com/BachiLi/redner.git
+
+# pip install pyrender
+# pip install trimesh PyOpenGL PyOpenGL-accelerate
+
+# sudo apt-get install g++
+# pip install git+https://github.com/facebookresearch/pytorch3d.git
+# apt-get install build-essential python3-dev cmake ninja-build
+# conda install pytorch3d -c pytorch3d                      
+matplotlib
+opencv-python
+plotly
+scipy
+jupyterplot
+trimesh
+tensorboardX
+numpy>=1.16.2
+torch>=1.0.1.post2
+torchgeometry>=0.1.2
+pillow
+trimesh
+pyrender
+PyYAML
+git+https://github.com/otaheri/chamfer_distance.git
+git+https://github.com/otaheri/MANO.git
+git+https://github.com/otaheri/bps_torch.git
+git+https://github.com/MPI-IS/mesh.git
+
+# apt-get update
+# apt-get install cuda-11-8
+# conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+# conda install pytorch3d -c pytorch3d
+
+# export PATH=/usr/local/cuda/bin:$PATH
+# export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+# source ~/.bashrc

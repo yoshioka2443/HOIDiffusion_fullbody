@@ -41,7 +41,8 @@ def main():
     
     runner = Runner(output_dir)
     # load handmesh, obj mesh, camera parameters
-    runner.load_data(sequence_name='GPMF12', frame_number=250, replacement_object_name='010_potted_meat_can')
+    runner.load_data(sequence_name='MC1', frame_number=250, replacement_object_name='010_potted_meat_can')
+    # runner.load_data(sequence_name='GPMF12', frame_number=250, replacement_object_name='010_potted_meat_can')
     runner.make_original_scene()
     runner.render_original_scene()
     runner.estimate_envmap()
