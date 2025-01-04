@@ -12,10 +12,12 @@ export PATH="/root/miniconda3/bin:$PATH"
 source ~/.bashrc
 
 conda info -e
-conda create -n HOIDiffusion python=3.10 -y
+conda create -n fullbody python=3.10 -y
 conda init bash
 source ~/.bashrc
 conda activate HOIDiffusion
+
+
 
 
 

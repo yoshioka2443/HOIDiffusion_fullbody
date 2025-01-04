@@ -28,9 +28,13 @@ os.environ["PYREDNER_VERBOSE"] = "0"
 
 # %%
 def print_device_info():
+    # gpuを3番目に指定
     if torch.cuda.is_available():
+        torch.cuda.set_device(2)
         print(f"GPU Name: {torch.cuda.get_device_name(0)}")
         print(f"Memory: {torch.cuda.get_device_properties(0).total_memory / (1024 ** 3):.2f} GB")
+        print(f"Number of GPUs: {torch.cuda.device_count()}")
+        print(f"Current GPU: {torch.cuda.current_device()}")
     else:
         print("No GPU detected.")
 

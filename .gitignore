@@ -1,3 +1,10 @@
 grabnet/output_data2/
 grabnet/output_data/
 grabnet/tools/__pycache__/
+gen_test_data/__pycache__/
+__pycache__/
+
+externals/redner/
+.gitmodules
+
+V00.log

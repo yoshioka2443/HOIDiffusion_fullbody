@@ -1,2 +1,2 @@
-2024-12-31 19:07:44,077 - root - INFO - Restored CoarseNet model from grabnet/models/coarsenet.pt
-2024-12-31 19:07:44,154 - root - INFO - Restored RefineNet model from grabnet/models/refinenet.pt
+2025-01-04 16:15:02,114 - root - INFO - Restored CoarseNet model from grabnet/models/coarsenet.pt
+2025-01-04 16:15:02,123 - root - INFO - Restored RefineNet model from grabnet/models/refinenet.pt

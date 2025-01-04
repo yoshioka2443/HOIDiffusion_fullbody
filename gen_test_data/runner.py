@@ -21,11 +21,11 @@ from NIMBLE.manolayer import ManoLayer
 import mano
 from bps_torch.bps import bps_torch
 
-from tools.run_grabnet import run_grabnet
-from tools.plotly import PlotlyFigure
-from tools.load_mesh import load_obj_verts_, load_ho_meta
-from tools.transform import apply_transform_to_mesh, apply_trans
-from tools.texture import calc_vertex_normals, calc_face_normals
+from grabnet.tools.run_grabnet import run_grabnet
+from grabnet.tools.plotly import PlotlyFigure
+from grabnet.tools.load_mesh import load_obj_verts_, load_ho_meta
+from grabnet.tools.transform import apply_transform_to_mesh, apply_trans
+from grabnet.tools.texture import calc_vertex_normals, calc_face_normals
 
 from gen_test_data.relighting import deringing
 from gen_test_data.transform import apply_transform, to_homogeneous_matrix
@@ -33,7 +33,8 @@ from gen_test_data.image_edit import resize_and_pad_image
 
 import cv2
 
-dataset_dir = '../datasets'
+# dataset_dir = '../datasets'
+dataset_dir = "/home/projects/dataset"
 
 def save_image(original_image, output_dir, filename="original.png"):
     """画像を保存します。"""
@@ -51,7 +52,8 @@ class Runner:
     def initialize_grabnet(self):
         """GrabNetと関連モデルを初期化します。"""
         config_path = 'grabnet/configs/grabnet_cfg.yaml'
-        mano_right_hand_model_path = 'mano_data/mano_v1_2/models/mano/MANO_RIGHT.pkl'
+        # mano_right_hand_model_path = 'mano_data/mano_v1_2/models/mano/MANO_RIGHT.pkl'
+        mano_right_hand_model_path = 'NIMBLE/mano_v1_2/models/mano/MANO_RIGHT.pkl'
         config = dict(
             work_dir='grabnet/logs',
             best_cnet='grabnet/models/coarsenet.pt',
@@ -95,6 +97,7 @@ class Runner:
     def load_object_data(self, sequence_name, frame_number, replacement_object_name):
         """オブジェクトと手のデータを読み込みます。"""
         meta_path = dataset_dir + f'/HO3D_v3/train/{sequence_name}/meta/{frame_number:04d}.pkl'
+        print("meta_path", meta_path)
         with open(meta_path, 'rb') as f:
             data = pickle.load(f, encoding='latin1')
 
@@ -102,7 +105,8 @@ class Runner:
         self.replacement_object_path = dataset_dir + f"/models/{replacement_object_name}/textured_simple.obj"
 
         # オブジェクトと手のパラメータ
-        self.object_rotation_np = R.from_rotvec(data['objRot'].T[0]).as_matrix().astype(np.float32)
+        # self.object_rotation_np = R.from_rotvec(data['objRot'].T[0]).as_matrix().astype(np.float32)
+        self.object_rotation_np = R.from_rotvec(data['objRot'].T).as_matrix().astype(np.float32)
         self.object_translation_np = data['objTrans'].astype(np.float32)
         self.hand_translation_np = data['handTrans'].astype(np.float32)
         self.global_orient = data['handPose'][:3]
