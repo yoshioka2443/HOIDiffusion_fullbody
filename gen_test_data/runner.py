@@ -34,7 +34,8 @@ from gen_test_data.image_edit import resize_and_pad_image
 import cv2
 
 # dataset_dir = '../datasets'
-dataset_dir = "/home/projects/dataset"
+# dataset_dir = "/home/projects/dataset"
+dataset_dir = "/workspace/dataset"
 
 def save_image(original_image, output_dir, filename="original.png"):
     """画像を保存します。"""
@@ -185,28 +186,123 @@ class Runner:
             material=self.original_object.material
         )
 
-        self.scene = pyredner.Scene(
+        self.original_scene = pyredner.Scene(
             camera=self.camera,
             objects=[self.original_hand, self.original_object]
         )
+        self.light = pyredner.AmbientLight(intensity=torch.tensor([1., 1., 1.]))
         print("Original scene created.")
 
     def render_original_scene(self):
         """置き換え前のシーンをレンダリングします。"""
-        light = pyredner.AmbientLight(intensity=torch.tensor([1., 1., 1.]))
-        self.original_scene = pyredner.render_deferred(self.scene, lights=[light], alpha=True)
+        self.original_render = pyredner.render_deferred(self.original_scene, lights=[self.light], alpha=True)
         print("Original scene rendered.")
-        return self.original_scene
+        # return self.original_render
     
+    def make_replaced_scene(self):
+        uvs = torch.stack([self.mano_layer.uv[..., 0], 1 - self.mano_layer.uv[..., 1]], -1)
+
+        # 元の手のメッシュ
+        self.replaced_hand_vertices = self.mano_hand.vertices[0].type(torch.float32).cpu().detach()
+        vertex_normals = calc_vertex_normals(self.replaced_hand_vertices, self.mano_layer.faces)
+
+        self.replaced_hand = pyredner.Object(
+            vertices=self.replaced_hand_vertices,
+            indices=self.mano_layer.faces.to(torch.int32),
+            uvs=torch.tensor(uvs, dtype=torch.float32),
+            uv_indices=torch.tensor(self.mano_layer.face_uvs, dtype=torch.int32),
+            normals=torch.tensor(vertex_normals, dtype=torch.float32),
+            normal_indices=self.mano_layer.faces.to(torch.int32),
+            material=pyredner.Material(
+                diffuse_reflectance=self.mano_layer.tex_diffuse_mean.to(pyredner.get_device()),
+                specular_reflectance=self.mano_layer.tex_spec_mean.to(pyredner.get_device())
+            )
+        )
+
+        self.replaced_object = pyredner.Object(
+            vertices=self.replaced_object_vertices.type(torch.float32),
+            indices=self.replacement_object.indices.type(torch.int32),
+            uvs=self.replacement_object.uvs,
+            uv_indices=self.replacement_object.uv_indices,
+            material=self.replacement_object.material
+        )
+
+        self.replaced_scene = pyredner.Scene(
+            camera=self.camera,
+            objects=[self.replaced_hand, self.replaced_object]
+        )
+        print("Replaced scene created.")
+
+    def render_replaced_scene(self):
+        """置き換え前のシーンをレンダリングします。"""
+        self.replaced_render = pyredner.render_deferred(self.replaced_scene, lights=[self.light], alpha=True)
+        print("Replaced scene rendered.")
+        # return self.replaced_render
+    
+    def render_scene(self, replace="origin", env=None):
+        if replace == "origin":
+            Hand = self.original_hand
+            Object = self.original_object
+        elif replace == "replaced":
+            Hand = self.replaced_hand
+            Object = self.replaced_object
+
+
+
+        if env == "estimated":
+            scene = pyredner.Scene(
+                camera=self.camera,
+                objects=[Hand, Object],
+                envmap=self.envmap
+            )
+            render = pyredner.render_deferred(scene, lights=[self.light], alpha=True)
+            albedo = pyredner.render_albedo(scene)
+        else:
+            scene = pyredner.Scene(
+                camera=self.camera,
+                objects=[Hand, Object]
+            )
+            render = pyredner.render_deferred(scene, lights=[self.light], alpha=True)
+            albedo = pyredner.render_albedo(scene)
+
+        # depth            
+        g_buffer = pyredner.render_g_buffer(
+            scene=scene,
+            channels=[pyredner.channels.depth]
+        )
+        depth_map = g_buffer[..., 0]
+
+        # デプス値を0から1に正規化
+        min_depth = depth_map.min()
+        max_depth = depth_map.max()
+        normalized_depth = (depth_map - min_depth) / (max_depth - min_depth)
+
+        if replace == "origin":
+            self.original_render = render.cpu().detach().numpy()
+            self.original_albedo = albedo.cpu().detach().numpy()
+            self.original_depth = normalized_depth.cpu().detach().numpy()
+            # self.original_render = render.cpu().detach()
+            # self.original_albedo = albedo.cpu().detach()
+        elif replace == "replaced":
+            self.replaced_render = render.cpu().detach().numpy()
+            self.replaced_albedo = albedo.cpu().detach().numpy()
+            self.replaced_depth = normalized_depth.cpu().detach().numpy()
+            # self.replaced_render = render.cpu().detach()
+            # self.replaced_albedo = albedo.cpu().detach()
+
+        else:
+            print("Invalid scene name.")
+
     def save_images(self):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
-        original_image = torch.pow(self.original_scene, 1.0 / 2.2).cpu().detach().numpy()
+        original_image = torch.pow(torch.from_numpy(self.original_render), 1.0 / 2.2).cpu().detach().numpy()
         save_image(original_image, self.output_dir, filename="original.png")
         save_image(self.background_image, self.output_dir, filename="background.png")
-        save_image(self.replaced_scene, self.output_dir, filename="replaced.png")
+        save_image(self.replaced_render, self.output_dir, filename="replaced.png")
         save_image(self.replaced_albedo, self.output_dir, filename="albedo.png")
+        save_image(self.replaced_depth, self.output_dir, filename="depth.png")
         print(f"Images saved to {self.output_dir}")
 
 
@@ -235,7 +331,7 @@ class Runner:
             lr=3e-2)
 
         scene_args = pyredner.RenderFunction.serialize_scene(
-            scene = self.scene,
+            scene = self.original_scene,
             num_samples = 512,
             max_bounces = 1,
             sampler_type=pyredner.sampler_type.independent,
@@ -252,7 +348,7 @@ class Runner:
             )
         render = pyredner.RenderFunction.apply
         # Render the scene.
-        render_albedo = pyredner.render_albedo(self.scene, alpha=True)
+        render_albedo = pyredner.render_albedo(self.original_scene, alpha=True)
         mask = render_albedo[..., -1]
 
         
@@ -333,8 +429,8 @@ class Runner:
                 },
             })
 
-            if t > 0 and t % (10 ** int(math.log10(t))) == 0:
-                pyredner.imwrite(img.cpu(), f'{self.output_dir}/iter_{t}.png')
+            # if t > 0 and t % (10 ** int(math.log10(t))) == 0:
+            #     pyredner.imwrite(img.cpu(), f'{self.output_dir}/iter_{t}.png')
 
         pp.finalize()
 
@@ -349,9 +445,9 @@ class Runner:
 
         # 元の手のパラメータ
         original_hand_params = dict(
-            transl=self.hand_translation.unsqueeze(0).to(self.grabnet.device),
-            grobal_orient=self.hand_rotation.to(self.grabnet.device),
-            hand_pose=self.hand_pose.to(self.grabnet.device)
+            transl=self.hand_translation.unsqueeze(0).float().to(self.grabnet.device),
+            grobal_orient=self.hand_rotation.float().to(self.grabnet.device),
+            hand_pose=self.hand_pose.float().to(self.grabnet.device)
         )
 
         # GrabNetで手を生成
@@ -389,63 +485,65 @@ class Runner:
                            to_homogeneous_matrix(T=-gen_wrist_position)
 
         # 手とオブジェクトの頂点に変換を適用
-        self.mano_vertices = apply_transform(hand_grabnet_gen, transform_matrix)
-        self.object_vertices = apply_transform(obj_vertices, transform_matrix)
+        self.replaced_mano_vertices = apply_transform(hand_grabnet_gen, transform_matrix)
+        self.replaced_object_vertices = apply_transform(obj_vertices, transform_matrix)
 
         self.gen_hand_joints_trans = apply_transform(self.gen_hand.joints[:, :, :][0].cpu() + self.object_translation, transform_matrix)
 
-        return self.mano_vertices, self.object_vertices
+        # return self.replaced_mano_vertices, self.replaced_object_vertices
 
-    def render_scene(self, scene="origin"):
-        if scene == "replaced":
-            hand_vertices = self.mano_vertices
-            object_vertices = self.object_vertices
-        else:
-            hand_vertices = self.original_hand_vertices
-            object_vertices = self.original_object_vertices
+    # def render_scene(self, scene="origin"):
+    #     if scene == "replaced":
+    #         print("Rendering replaced scene.")
+    #         hand_vertices = self.replaced_mano_vertices
+    #         object_vertices = self.replaced_object_vertices
+    #     else:
+    #         print("Rendering original scene.")
+    #         hand_vertices = self.original_hand_vertices
+    #         object_vertices = self.original_object_vertices
         
-        """シーンをレンダリングします。"""
-        light = pyredner.AmbientLight(intensity=torch.tensor([1., 1., 1.]))
-        uvs = torch.stack([self.mano_layer.uv[..., 0], 1 - self.mano_layer.uv[..., 1]], -1)
-        vertex_normals = calc_vertex_normals(hand_vertices, self.mano_layer.faces)
+    #     """シーンをレンダリングします。"""
+    #     light = pyredner.AmbientLight(intensity=torch.tensor([1., 1., 1.]))
+    #     uvs = torch.stack([self.mano_layer.uv[..., 0], 1 - self.mano_layer.uv[..., 1]], -1)
+    #     vertex_normals = calc_vertex_normals(hand_vertices, self.mano_layer.faces)
 
-        hand = pyredner.Object(
-            vertices=hand_vertices,
-            indices=self.mano_layer.faces.to(torch.int32),
-            uvs=torch.tensor(uvs, dtype=torch.float32),
-            uv_indices=torch.tensor(self.mano_layer.face_uvs, dtype=torch.int32),
-            normals=torch.tensor(vertex_normals, dtype=torch.float32),
-            normal_indices=self.mano_layer.faces.to(torch.int32),
-            material=pyredner.Material(
-                diffuse_reflectance=self.mano_layer.tex_diffuse_mean.to(pyredner.get_device()),
-                specular_reflectance=self.mano_layer.tex_spec_mean.to(pyredner.get_device())
-            )
-        )
+    #     hand = pyredner.Object(
+    #         vertices=hand_vertices,
+    #         indices=self.mano_layer.faces.to(torch.int32),
+    #         uvs=torch.tensor(uvs, dtype=torch.float32),
+    #         uv_indices=torch.tensor(self.mano_layer.face_uvs, dtype=torch.int32),
+    #         normals=torch.tensor(vertex_normals, dtype=torch.float32),
+    #         normal_indices=self.mano_layer.faces.to(torch.int32),
+    #         material=pyredner.Material(
+    #             diffuse_reflectance=self.mano_layer.tex_diffuse_mean.to(pyredner.get_device()),
+    #             specular_reflectance=self.mano_layer.tex_spec_mean.to(pyredner.get_device())
+    #         )
+    #     )
 
-        replacement_object = pyredner.Object(
-            vertices=object_vertices,
-            indices=self.replacement_object.indices.type(torch.int32),
-            uvs=self.replacement_object.uvs,
-            uv_indices=self.replacement_object.uv_indices,
-            material=self.replacement_object.material
-        )
+    #     replacement_object = pyredner.Object(
+    #         vertices=object_vertices,
+    #         indices=self.replacement_object.indices.type(torch.int32),
+    #         uvs=self.replacement_object.uvs,
+    #         uv_indices=self.replacement_object.uv_indices,
+    #         material=self.replacement_object.material
+    #     )
 
-        # scene = pyredner.Scene(
-        #     camera=self.camera,
-        #     objects=[hand, replacement_object]
-        # )
-        # return pyredner.render_deferred(scene, lights=[light], alpha=True), pyredner.render_albedo(scene)
-        scene = pyredner.Scene(
-            camera=self.camera,
-            objects=[hand, replacement_object],
-            envmap=self.envmap
-        )
-        if scene == "origin":
-            self.original_scene = pyredner.render_deferred(scene, lights=[light], alpha=True).cpu().detach().numpy()
-            self.original_albedo = pyredner.render_albedo(scene).cpu().detach().numpy()
-        elif scene == "replaced":
-            self.replaced_scene = pyredner.render_deferred(scene, lights=[light], alpha=True).cpu().detach().numpy()
-            self.replaced_albedo = pyredner.render_albedo(scene).cpu().detach().numpy()
+    #     # scene = pyredner.Scene(
+    #     #     camera=self.camera,
+    #     #     objects=[hand, replacement_object]
+    #     # )
+    #     # return pyredner.render_deferred(scene, lights=[light], alpha=True), pyredner.render_albedo(scene)
+    #     scene = pyredner.Scene(
+    #         camera=self.camera,
+    #         objects=[hand, replacement_object],
+    #         envmap=self.envmap
+    #     )
+        # if scene == "origin":
+        #     self.original_scene = pyredner.render_deferred(scene, lights=[light], alpha=True).cpu().detach().numpy()
+        #     self.original_albedo = pyredner.render_albedo(scene).cpu().detach().numpy()
+        # elif scene == "replaced":
+        #     self.replaced_scene = pyredner.render_deferred(scene, lights=[light], alpha=True).cpu().detach().numpy()
+        #     self.replaced_albedo = pyredner.render_albedo(scene).cpu().detach().numpy()
     
     def render_depth(self, hand_vertices, object_vertices):
         """シーンのデプス（深度）をレンダリングし、0から1の範囲に正規化してグレースケール画像として返します。"""

@@ -30,7 +30,7 @@ os.environ["PYREDNER_VERBOSE"] = "0"
 def print_device_info():
     # gpuを3番目に指定
     if torch.cuda.is_available():
-        torch.cuda.set_device(2)
+        torch.cuda.set_device(0)
         print(f"GPU Name: {torch.cuda.get_device_name(0)}")
         print(f"Memory: {torch.cuda.get_device_properties(0).total_memory / (1024 ** 3):.2f} GB")
         print(f"Number of GPUs: {torch.cuda.device_count()}")
@@ -41,6 +41,8 @@ def print_device_info():
 # %%
 def main():
     print_device_info()
+    if not os.path.exists('sample'):
+        os.makedirs('sample')
     output_dir='sample'
     
     runner = Runner(output_dir)
@@ -51,6 +53,10 @@ def main():
     runner.render_original_scene()
     runner.estimate_envmap()
     runner.render_scene()
+    runner.replace_object()
+    runner.make_replaced_scene()
+    runner.render_scene("replaced", "estimated")
+    # runner.render_scene("replaced")
     runner.save_images()
 
     """
@@ -60,7 +66,6 @@ def main():
     レンダリング depth, mask, albedo, texture, seg, skeleton, rgb
     画像を出力 depth, mask, albedo, texture, seg, skeleton, rgb
     手の先を修正
-
     """
 # %%
 if __name__ == '__main__':
