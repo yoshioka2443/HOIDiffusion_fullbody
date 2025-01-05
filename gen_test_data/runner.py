@@ -37,10 +37,9 @@ import cv2
 # dataset_dir = "/home/projects/dataset"
 dataset_dir = "/workspace/dataset"
 
-def save_image(original_image, output_dir, filename="original.png", img=None):
+def save_image(original_image, image_path, img=None):
     """画像を保存します。"""
-    image_path = os.path.join(output_dir, filename)
-    if img == "depth":
+    if img == "depth" or img == "seg":
         plt.show()
         plt.imsave(image_path, original_image, cmap='gray')
         plt.close()
@@ -135,10 +134,10 @@ class Runner:
         self.original_object = pyredner.load_obj(self.original_object_path, return_objects=True)[0]
         self.original_object_vertices = self.original_object.vertices.type(torch.float32).cpu() @ self.object_rotation.T + self.object_translation
         self.replacement_object = pyredner.load_obj(self.replacement_object_path, return_objects=True)[0]
-        print("self.original_object.vertices", self.original_object.vertices.shape)
-        print("self.object_rotation.T", self.object_rotation.T.shape)
-        print("self.object_translation", self.object_translation.shape)
-        print("original_object_vertices pre", self.original_object_vertices.shape)
+        # print("self.original_object.vertices", self.original_object.vertices.shape)
+        # print("self.object_rotation.T", self.object_rotation.T.shape)
+        # print("self.object_translation", self.object_translation.shape)
+        # print("original_object_vertices pre", self.original_object_vertices.shape)
 
         # 手のモデルをロード
         self.annotation = load_ho_meta(meta_path)
@@ -269,6 +268,7 @@ class Runner:
                 objects=[Hand, Object],
                 envmap=self.envmap
             )
+            scene.object_material_id = torch.tensor([0, 1])
             render = pyredner.render_deferred(scene, lights=[self.light], alpha=True)
             albedo = pyredner.render_albedo(scene)
         else:
@@ -276,51 +276,111 @@ class Runner:
                 camera=self.camera,
                 objects=[Hand, Object]
             )
+            scene.object_material_id = torch.tensor([1, 2])
             render = pyredner.render_deferred(scene, lights=[self.light], alpha=True)
             albedo = pyredner.render_albedo(scene)
 
         # depth            
+        # g_buffer = pyredner.render_g_buffer(
+        #     scene=scene,
+        #     channels=[pyredner.channels.depth]
+        # )
+        # depth_map = g_buffer[..., 0]
+
+        # render = pyredner.RenderFunction.apply
+        # depth_map = render(scene, 1, [pyredner.channels.depth])
+        # mask_image = render(scene, 2, [pyredner.channels.segmentation])
+
         g_buffer = pyredner.render_g_buffer(
             scene=scene,
             channels=[pyredner.channels.depth]
         )
         depth_map = g_buffer[..., 0]
+        # seg
+        try:
+            g_buffer = pyredner.render_g_buffer(
+                scene=scene,
+                channels=[pyredner.channels.object_id]
+            )
+            mask_image = g_buffer[..., 0]
+        except:
+            mask_image = torch.zeros_like(depth_map)
+
+        try:
+            texture_image = pyredner.render_texture(scene)
+        except:
+            texture_image = torch.zeros_like(render)
+        
+        print("depth_map", depth_map.max(), depth_map.min())
+        print("mask_image", mask_image.max(), mask_image.min())
+        print("texture_image", texture_image.max(), texture_image.min())
 
         # デプス値を0から1に正規化
         min_depth = depth_map.min()
         max_depth = depth_map.max()
-        normalized_depth = (depth_map - min_depth) / (max_depth - min_depth)
+        depth_image = (depth_map - min_depth) / (max_depth - min_depth)
 
+        # save
         if replace == "origin":
             self.original_render = render.cpu().detach().numpy()
             self.original_albedo = albedo.cpu().detach().numpy()
-            self.original_depth = normalized_depth.cpu().detach().numpy()
-            # self.original_render = render.cpu().detach()
-            # self.original_albedo = albedo.cpu().detach()
+            self.original_depth = depth_image.cpu().detach().numpy()
         elif replace == "replaced":
             self.replaced_render = render.cpu().detach().numpy()
             self.replaced_albedo = albedo.cpu().detach().numpy()
-            self.replaced_depth = normalized_depth.cpu().detach().numpy()
-            # self.replaced_render = render.cpu().detach()
-            # self.replaced_albedo = albedo.cpu().detach()
+            self.replaced_depth = depth_image.cpu().detach().numpy()
+            self.replaced_mask = mask_image.cpu().detach().numpy()
+            self.replaced_texture = texture_image.cpu().detach().numpy()
             self.render_skeleton()
+            
 
         else:
             print("Invalid scene name.")
 
-    def save_images(self):
+    def save_images(self, num):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
+        if not os.path.exists(os.path.join(self.output_dir, "rgb")):
+            os.makedirs(os.path.join(self.output_dir, "rgb"))
+        if not os.path.exists(os.path.join(self.output_dir, "albedo")):
+            os.makedirs(os.path.join(self.output_dir, "albedo"))
+        if not os.path.exists(os.path.join(self.output_dir, "depth")):
+            os.makedirs(os.path.join(self.output_dir, "depth"))
+        if not os.path.exists(os.path.join(self.output_dir, "skeleton")):
+            os.makedirs(os.path.join(self.output_dir, "skeleton"))
+        if not os.path.exists(os.path.join(self.output_dir, "seg")):
+            os.makedirs(os.path.join(self.output_dir, "seg"))
+        if not os.path.exists(os.path.join(self.output_dir, "mask")):
+            os.makedirs(os.path.join(self.output_dir, "mask"))
+        if not os.path.exists(os.path.join(self.output_dir, "texture")):
+            os.makedirs(os.path.join(self.output_dir, "texture"))
 
         original_image = torch.pow(torch.from_numpy(self.original_render), 1.0 / 2.2).cpu().detach().numpy()
-        save_image(original_image, self.output_dir, filename="original.png")
-        save_image(self.background_image, self.output_dir, filename="background.png")
-        save_image(self.replaced_render, self.output_dir, filename="replaced.png")
-        save_image(self.replaced_albedo, self.output_dir, filename="albedo.png")
-        save_image(self.replaced_depth, self.output_dir, filename="depth.png", img="depth")
-        save_image(self.replaced_skeleton, self.output_dir, filename="skeleton.png", img="skeleton")
-        print(f"Images saved to {self.output_dir}")
+        # print("self.replaced_render", self.replaced_render.shape)
+        # save_image(original_image, self.output_dir, filename="original.png")
+        # save_image(self.background_image, self.output_dir, filename="background.png")
 
+        self.rgb_image_path = os.path.join(self.output_dir, "rgb" ,f"rgb{num}.png")
+        self.albedo_image_path = os.path.join(self.output_dir, "albedo", f"albedo{num}.png")
+        self.depth_image_path = os.path.join(self.output_dir, "depth", f"depth{num}.png")
+        self.skeleton_image_path = os.path.join(self.output_dir, "skeleton", f"skeleton{num}.png")
+        self.seg_image_path = os.path.join(self.output_dir, "seg", f"seg{num}.png")
+        self.mask_image_path = os.path.join(self.output_dir, "mask", f"mask{num}.png")
+        self.texture_image_path = os.path.join(self.output_dir, "texture", f"texture{num}.png")
+
+        save_image(self.replaced_render[:,:,:3], self.rgb_image_path)
+        save_image(self.replaced_albedo, self.albedo_image_path)
+        save_image(self.replaced_depth, self.depth_image_path, img="depth")
+        save_image(self.replaced_skeleton, self.skeleton_image_path, img="skeleton")
+        save_image(self.replaced_render[:,:,-1], self.seg_image_path, img="seg")
+        save_image(self.replaced_mask, self.mask_image_path, img="mask")
+        save_image(self.replaced_texture, self.texture_image_path, img="texture")
+        print(f"Images saved to {self.output_dir}")
+    
+    def get_paths(self):
+        fieldnames = ['rgb', 'seg', 'depth', 'skeleton', 'albedo', 'texture']
+        image_paths = [self.rgb_image_path, self.seg_image_path, self.depth_image_path, self.skeleton_image_path, self.albedo_image_path, self.texture_image_path]
+        return dict(zip(fieldnames, image_paths))
 
     def estimate_envmap(self):
         print(type(self.original_object))
@@ -529,6 +589,31 @@ class Runner:
         return proj_pts
 
     # skeleton
+    def render_skeleton(self):
+        """手のスケルトンをレンダリングし、画像として保存します。"""
+        joints_3d = self.gen_hand_joints_trans
+
+        # カメラパラメータの取得
+        K = self.K.detach().cpu().numpy()
+
+        # ジョイントの投影（3D -> 2D）
+        joints_2d = self.project_3D_points(K, joints_3d)
+
+        # 画像の解像度に合わせてスケール調整
+        joints_2d[:, 0] = joints_2d[:, 0]
+        joints_2d[:, 1] = self.resolution[0] - joints_2d[:, 1]
+
+        # スケルトンの描画
+        skeleton_image = self.showHandJoints(self.background_image, joints_2d)
+
+        # 反転
+        skeleton_image = cv2.flip(skeleton_image, 0)
+
+        # リサイズとパディング
+        # skeleton_image_uint8 = (skeleton_image * 255).astype(np.uint8)
+        skeleton_image_resized = resize_and_pad_image(skeleton_image)
+        self.replaced_skeleton = skeleton_image_resized
+
     def showHandJoints(self, imgInOrg, gtIn, filename=None):
         """手のジョイントとボーンを画像上に描画します。"""
         imgIn = np.copy(imgInOrg)
@@ -571,39 +656,4 @@ class Runner:
             cv2.imwrite(filename, imgIn)
 
         return imgIn
-
-    def render_skeleton(self):
-        """手のスケルトンをレンダリングし、画像として保存します。"""
-        joints_3d = self.gen_hand_joints_trans
-
-        # カメラパラメータの取得
-        K = self.K.detach().cpu().numpy()
-
-        # ジョイントの投影（3D -> 2D）
-        joints_2d = self.project_3D_points(K, joints_3d)
-
-        # 画像の解像度に合わせてスケール調整
-        joints_2d[:, 0] = joints_2d[:, 0]
-        joints_2d[:, 1] = self.resolution[0] - joints_2d[:, 1]
-
-        # スケルトンの描画
-        skeleton_image = self.showHandJoints(self.background_image, joints_2d)
-
-        # 反転
-        skeleton_image = cv2.flip(skeleton_image, 0)
-
-        # リサイズとパディング
-        # skeleton_image_uint8 = (skeleton_image * 255).astype(np.uint8)
-        skeleton_image_resized = resize_and_pad_image(skeleton_image)
-        self.replaced_skeleton = skeleton_image_resized
-        # return skeleton_image_resized
-
-        # # 画像を保存
-        # output_dir = 'test_data_ad/skeleton'
-        # os.makedirs(output_dir, exist_ok=True)
-        # output_path = os.path.join(output_dir, f'hand_skeleton{num}.png')
-        # # cv2.imwrite(output_path, skeleton_image_resized)
-        # cv2.imwrite(output_path, cv2.cvtColor(skeleton_image_resized, cv2.COLOR_RGB2BGR))
-        # print(f"スケルトン画像を保存しました: {output_path}")
-
-        # return output_path
+    
