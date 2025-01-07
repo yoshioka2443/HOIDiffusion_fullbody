@@ -43,7 +43,7 @@ def main():
     print_device_info()
 
     # パラメータの設定
-    output_dir = 'test_data'
+    output_dir = 'test_data_NIMBLE'
     sequence_name = 'GPMF12'
     frame_number = 250
     
@@ -60,12 +60,13 @@ def main():
 
     for i, object_name in enumerate(replacement_object_name_list, start=1):
         """
-        デバイスの指定
-        テクスチャの最適化
-        replace
-        レンダリング depth, mask, albedo, texture, seg, skeleton, rgb
-        画像を出力 depth, mask, albedo, texture, seg, skeleton, rgb
-        手の先を修正
+        --実装メモ--
+        デバイスの指定 OK
+        テクスチャの最適化 OK
+        replace OK
+        レンダリング depth, mask, albedo, texture, seg, skeleton, rgb OK
+        画像を出力 depth, mask, albedo, texture, seg, skeleton, rgb OK
+        手の先を修正 OK
         """
         runner = Runner(output_dir)
         # load handmesh, obj mesh, camera parameters
@@ -74,11 +75,13 @@ def main():
         runner.make_original_scene()
         runner.render_original_scene()
         # runner.estimate_envmap()
+        runner.estimate_nimble()
         runner.render_scene()
         runner.replace_object()
         runner.make_replaced_scene()
         # runner.render_scene("replaced", "estimated")
-        runner.render_scene("replaced")
+        runner.render_scene("replaced", tex="NIMBLE")
+        # runner.render_scene("replaced", tex="blended")
         runner.save_images(i)
 
         image_paths = runner.get_paths()

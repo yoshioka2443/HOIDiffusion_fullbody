@@ -10,3 +10,6 @@ externals/redner/
 V00.log
 sample/
 test_data/
+
+test_data_NIMBLE/
+test_data_blended/

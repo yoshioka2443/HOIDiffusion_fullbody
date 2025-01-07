@@ -134,6 +134,7 @@ class Runner:
         self.original_object = pyredner.load_obj(self.original_object_path, return_objects=True)[0]
         self.original_object_vertices = self.original_object.vertices.type(torch.float32).cpu() @ self.object_rotation.T + self.object_translation
         self.replacement_object = pyredner.load_obj(self.replacement_object_path, return_objects=True)[0]
+        self.replaced_object_vertices = self.replacement_object.vertices.type(torch.float32).cpu() @ self.object_rotation.T + self.object_translation
         # print("self.original_object.vertices", self.original_object.vertices.shape)
         # print("self.object_rotation.T", self.object_rotation.T.shape)
         # print("self.object_translation", self.object_translation.shape)
@@ -216,7 +217,8 @@ class Runner:
         uvs = torch.stack([self.mano_layer.uv[..., 0], 1 - self.mano_layer.uv[..., 1]], -1)
 
         # 元の手のメッシュ
-        self.replaced_hand_vertices = self.mano_hand.vertices[0].type(torch.float32).cpu().detach()
+        # self.replaced_hand_vertices = self.mano_hand.vertices[0].type(torch.float32).cpu().detach()
+
         vertex_normals = calc_vertex_normals(self.replaced_hand_vertices, self.mano_layer.faces)
 
         self.replaced_hand = pyredner.Object(
@@ -252,7 +254,7 @@ class Runner:
         print("Replaced scene rendered.")
         # return self.replaced_render
     
-    def render_scene(self, replace="origin", env=None):
+    def render_scene(self, replace="origin", env=None, tex=None):
         if replace == "origin":
             Hand = self.original_hand
             Object = self.original_object
@@ -260,25 +262,32 @@ class Runner:
             Hand = self.replaced_hand
             Object = self.replaced_object
 
+        if tex == "NIMBLE":
+            Hand.material=pyredner.Material(
+                diffuse_reflectance = self.nimble_texture,
+                # specular_reflectance = specular_reflectance,
+                # normal_map = mano_layer.tex_normal_mean.to(pyredner.get_device()),
+            )
+        elif tex == "blended":
+            Hand.material=pyredner.Material(
+                diffuse_reflectance = self.blended_texture,
+                # specular_reflectance = specular_reflectance,
+                # normal_map = mano_layer.tex_normal_mean.to(pyredner.get_device()),
+            ) 
 
-
+        scene = pyredner.Scene(
+            camera=self.camera,
+            objects=[Hand, Object]
+        )
         if env == "estimated":
-            scene = pyredner.Scene(
-                camera=self.camera,
-                objects=[Hand, Object],
-                envmap=self.envmap
-            )
-            scene.object_material_id = torch.tensor([0, 1])
-            render = pyredner.render_deferred(scene, lights=[self.light], alpha=True)
-            albedo = pyredner.render_albedo(scene)
-        else:
-            scene = pyredner.Scene(
-                camera=self.camera,
-                objects=[Hand, Object]
-            )
-            scene.object_material_id = torch.tensor([1, 2])
-            render = pyredner.render_deferred(scene, lights=[self.light], alpha=True)
-            albedo = pyredner.render_albedo(scene)
+            scene.envmap = self.envmap
+
+        scene.object_material_id = torch.tensor([1, 2])
+        render = pyredner.render_deferred(scene, lights=[self.light], alpha=True)
+        albedo = pyredner.render_albedo(scene)
+
+        
+    
 
         # depth            
         # g_buffer = pyredner.render_g_buffer(
@@ -561,10 +570,14 @@ class Runner:
                            to_homogeneous_matrix(T=-gen_wrist_position)
 
         # 手とオブジェクトの頂点に変換を適用
-        self.replaced_mano_vertices = apply_transform(hand_grabnet_gen, transform_matrix)
+        self.replaced_hand_vertices = apply_transform(hand_grabnet_gen, transform_matrix)
         self.replaced_object_vertices = apply_transform(obj_vertices, transform_matrix)
 
         self.gen_hand_joints_trans = apply_transform(self.gen_hand.joints[:, :, :][0].cpu() + self.object_translation, transform_matrix)
+
+
+        plot_mesh([self.replaced_hand_vertices, self.replaced_object_vertices], [self.mano_layer.faces.cpu(), self.replacement_object.indices.cpu()], ["hand", "obj"])
+        
 
         # return self.replaced_mano_vertices, self.replaced_object_vertices
     
@@ -657,3 +670,154 @@ class Runner:
 
         return imgIn
     
+    def estimate_nimble(self):
+        # テクスチャの投影と最適化
+        self.project_texture_to_uv(self.background_image)
+        self.compute_front_mask()
+        self.projected_texture_masked = self.projected_texture * self.computed_front_mask + torch.ones_like(self.projected_texture) * (1 - self.computed_front_mask)
+        self.nimble_texture, _ = self.optimize_texture(self.projected_texture_masked, self.computed_front_mask, n_iterations=100, learning_rate=1e-5, lambda_reg_tex=1e3)
+
+        # テクスチャのブレンド
+        self.blended_texture = self.computed_front_mask * self.projected_texture + (1 - self.computed_front_mask) * self.nimble_texture
+
+    def project_texture_to_uv(self, texture=None):
+        """テクスチャをUV空間に投影します。"""
+        if texture is None:
+            texture = self.background_image
+
+        world_to_cam = torch.eye(4)
+        cv_to_gl = torch.diag(torch.tensor([1., -1., -1., 1]))
+        world_to_cam = world_to_cam @ cv_to_gl
+
+        vertices_cam = self.mano_hand.vertices[0] @ world_to_cam[:3, :3].T + world_to_cam[:3, 3].T
+        vertices_ndc = vertices_cam @ self.K.T
+        vertices_screen = vertices_ndc[..., :-1] / vertices_ndc[..., -1:]
+
+        vertices_uv = vertices_screen / torch.tensor([self.resolution[1], self.resolution[0]], dtype=torch.float32)
+
+        uvs3d = (torch.stack([
+            self.mano_layer.uv[..., 0],
+            self.mano_layer.uv[..., 1],
+            torch.zeros_like(self.mano_layer.uv[..., 0])], -1) * 2 - 1).to(pyredner.get_device()).type(torch.float32)
+
+        mano_uv_renderer = pyredner.Object(
+            vertices=uvs3d,
+            indices=torch.tensor(self.mano_layer.face_uvs, dtype=torch.int32),
+            uvs=vertices_uv,
+            uv_indices=self.mano_layer.faces.to(torch.int32),
+            material=pyredner.Material(
+                diffuse_reflectance=torch.tensor(texture).type(torch.float32).to(pyredner.get_device()),
+            )
+        )
+
+        camera_uv = pyredner.Camera(
+            camera_type=pyredner.camera_type.orthographic,
+            position=torch.tensor([0, 0, 1.], dtype=torch.float32),
+            look_at=torch.tensor([0, 0, 0.], dtype=torch.float32),
+            up=torch.tensor([0, 1., 0], dtype=torch.float32),
+            resolution=self.mano_layer.tex_diffuse_mean.shape[:2],
+        )
+
+        self.projected_texture =  pyredner.render_albedo(pyredner.Scene(camera=camera_uv, objects=[mano_uv_renderer]))
+
+    def compute_front_mask(self):
+        """手前向きの頂点のマスクを計算します。"""
+        world_to_cam = torch.eye(4)
+        cv_to_gl = torch.diag(torch.tensor([1., -1., -1., 1]))
+        world_to_cam = world_to_cam @ cv_to_gl
+
+        vertices_cam = self.mano_hand.vertices[0] @ world_to_cam[:3, :3].T + world_to_cam[:3, 3].T
+        vertices_ndc = vertices_cam @ self.K.T
+        vertices_screen = vertices_ndc[..., :-1] / vertices_ndc[..., -1:]
+        vertices_uv = vertices_screen / torch.tensor([self.resolution[1], self.resolution[0]], dtype=torch.float32)
+
+        vertices_normal_world = pyredner.compute_vertex_normal(self.mano_hand.vertices[0], self.mano_layer.faces)
+        vertices_normal_camera = vertices_normal_world @ torch.tensor(world_to_cam)[:3, :3].T
+        vertices_front = vertices_normal_camera @ torch.tensor([0, 0, -1.], dtype=torch.float32)
+        vertices_front = vertices_front.unsqueeze(-1).expand(-1, 3)
+
+        uvs3d = torch.stack([
+            self.mano_layer.uv[..., 0],
+            self.mano_layer.uv[..., 1],
+            torch.zeros_like(self.mano_layer.uv[..., 0])], -1) * 2 - 1
+
+        vertices_uvshape = torch.tensor(uvs3d, dtype=torch.float32)
+        for ft, fv in zip(self.mano_layer.face_uvs, self.mano_layer.faces):
+            vertices_uvshape[ft] = vertices_front[fv]
+
+        mano_uv_front = pyredner.Object(
+            vertices=uvs3d,
+            indices=torch.tensor(self.mano_layer.face_uvs, dtype=torch.int32),
+            uvs=vertices_uv,
+            uv_indices=self.mano_layer.faces.to(torch.int32),
+            material=pyredner.Material(use_vertex_color=True),
+            colors=vertices_uvshape
+        )
+
+        camera_uv = pyredner.Camera(
+            camera_type=pyredner.camera_type.orthographic,
+            position=torch.tensor([0, 0, 1.], dtype=torch.float32),
+            look_at=torch.tensor([0, 0, 0.], dtype=torch.float32),
+            up=torch.tensor([0, 1., 0], dtype=torch.float32),
+            resolution=self.mano_layer.tex_diffuse_mean.shape[:2],
+        )
+
+        g_buffer = pyredner.render_g_buffer(
+            scene=pyredner.Scene(camera=camera_uv, objects=[mano_uv_front]),
+            channels=[pyredner.channels.vertex_color],
+        )
+        vertex_color = g_buffer[..., :3]
+
+        self.computed_front_mask = torch.where(vertex_color > 0, 1., 0.)
+
+    def optimize_texture(self, texture, mask, n_iterations=300, learning_rate=1e-5, lambda_reg_tex=1e3):
+        """NIMBLEを用いてテクスチャを最適化します。"""
+        coeffs_tex = torch.zeros(10, dtype=torch.float32, requires_grad=True, device=pyredner.get_device())
+        optimizer = torch.optim.SGD([coeffs_tex], lr=learning_rate)
+
+        target_texture = torch.pow(texture, 2.2).detach()
+        mask = mask.detach()
+
+        pp = ProgressPlot(line_names=['loss_mse', 'reg_tex'])
+        for _ in range(n_iterations):
+            optimizer.zero_grad()
+            diffuse_reflectance = torch.sum(
+                coeffs_tex * self.mano_layer.tex_diffuse_basis.to(pyredner.get_device()), dim=-1)
+            diffuse_reflectance += self.mano_layer.tex_diffuse_mean.to(pyredner.get_device())
+
+            loss_mse = torch.pow((diffuse_reflectance - target_texture) * mask, 2).sum()
+            reg_tex = torch.pow(coeffs_tex, 2).sum() * lambda_reg_tex
+            loss = loss_mse + reg_tex
+            loss.backward()
+            optimizer.step()
+            pp.update([[loss_mse.item(), reg_tex.item()]])
+        pp.finalize()
+
+        return torch.clamp(torch.pow(diffuse_reflectance, 1 / 2.2), 0, 1), coeffs_tex
+
+    def project_3D_points(self, cam_mat, pts3D, is_OpenGL_coords=True):
+        """3Dポイントを2D画像座標に投影します。"""
+        if not isinstance(pts3D, np.ndarray):
+            pts3D = pts3D.squeeze(0).detach().cpu().numpy()
+        else:
+            pts3D = pts3D.squeeze(axis=0)
+        assert pts3D.shape[-1] == 3
+        assert len(pts3D.shape) == 2
+
+        coord_change_mat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)
+        if is_OpenGL_coords:
+            pts3D = pts3D.dot(coord_change_mat.T)
+
+        proj_pts = pts3D.dot(cam_mat.T)
+        proj_pts = np.stack([proj_pts[:,0]/proj_pts[:,2], proj_pts[:,1]/proj_pts[:,2]], axis=1)
+
+        assert len(proj_pts.shape) == 2
+
+        return proj_pts
+
+
+def plot_mesh(verts, faces, names):
+    fig = PlotlyFigure()
+    fig.add_mesh(verts[0], faces[0], name=names[0], opacity=0.5)
+    fig.add_mesh(verts[1], faces[1], name=names[1], opacity=0.5)
+    fig.show()
