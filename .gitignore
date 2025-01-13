@@ -8,3 +8,9 @@ externals/redner/
 .gitmodules
 
 V00.log
+
+experiments/
+midas_models/
+models/
+outputs/
+wandb/

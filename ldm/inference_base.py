@@ -246,7 +246,7 @@ def get_adapters(opt, cond_type: ExtraCondition):
             new_state_dict[k[len('adapter.'):]] = v
         else:
             new_state_dict[k] = v
-
+    # print(new_state_dict.keys())
     adapter['model'].load_state_dict(new_state_dict)
 
     return adapter

@@ -9,7 +9,6 @@ import csv  # 追加
 # サードパーティライブラリのインポート
 import numpy as np
 import torch
-import cv2
 import plotly.graph_objects as go
 
 # カスタムモジュールのインポート
@@ -40,8 +39,9 @@ def print_device_info():
 
 # %%
 def main():
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     print_device_info()
-    output_dir='sample'
+    output_dir='sample1'
     
     runner = Runner(output_dir)
     # load handmesh, obj mesh, camera parameters
