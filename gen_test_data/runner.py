@@ -581,95 +581,6 @@ class Runner:
 
         # return self.replaced_mano_vertices, self.replaced_object_vertices
     
-    def project_3D_points(self, cam_mat, pts3D, is_OpenGL_coords=True):
-        """3Dポイントを2D画像座標に投影します。"""
-        if not isinstance(pts3D, np.ndarray):
-            pts3D = pts3D.squeeze(0).detach().cpu().numpy()
-        else:
-            pts3D = pts3D.squeeze(axis=0)
-        assert pts3D.shape[-1] == 3
-        assert len(pts3D.shape) == 2
-
-        coord_change_mat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)
-        if is_OpenGL_coords:
-            pts3D = pts3D.dot(coord_change_mat.T)
-
-        proj_pts = pts3D.dot(cam_mat.T)
-        proj_pts = np.stack([proj_pts[:,0]/proj_pts[:,2], proj_pts[:,1]/proj_pts[:,2]], axis=1)
-
-        assert len(proj_pts.shape) == 2
-
-        return proj_pts
-
-    # skeleton
-    def render_skeleton(self):
-        """手のスケルトンをレンダリングし、画像として保存します。"""
-        joints_3d = self.gen_hand_joints_trans
-
-        # カメラパラメータの取得
-        K = self.K.detach().cpu().numpy()
-
-        # ジョイントの投影（3D -> 2D）
-        joints_2d = self.project_3D_points(K, joints_3d)
-
-        # 画像の解像度に合わせてスケール調整
-        joints_2d[:, 0] = joints_2d[:, 0]
-        joints_2d[:, 1] = self.resolution[0] - joints_2d[:, 1]
-
-        # スケルトンの描画
-        skeleton_image = self.showHandJoints(self.background_image, joints_2d)
-
-        # 反転
-        skeleton_image = cv2.flip(skeleton_image, 0)
-
-        # リサイズとパディング
-        # skeleton_image_uint8 = (skeleton_image * 255).astype(np.uint8)
-        skeleton_image_resized = resize_and_pad_image(skeleton_image)
-        self.replaced_skeleton = skeleton_image_resized
-
-    def showHandJoints(self, imgInOrg, gtIn, filename=None):
-        """手のジョイントとボーンを画像上に描画します。"""
-        imgIn = np.copy(imgInOrg)
-
-        # 指ごとに色を設定
-        joint_color_code = [[139, 53, 255],
-                            [0, 56, 255],
-                            [43, 140, 237],
-                            [37, 168, 36],
-                            [147, 147, 0],
-                            [70, 17, 145]]
-
-        limbs = [[0, 1],[1, 2],[2, 3],[3,17],[0, 4],[4, 5],[5, 6],[6, 18],[0, 7],[7, 8],[8, 9],[9, 19],
-                 [0, 10],[10, 11],[11, 12],[12, 20],[0, 13],[13, 14],[14, 15],[15, 16]]
-
-        gtIn = np.round(gtIn).astype(np.int32)
-
-        for joint_num in range(gtIn.shape[0]):
-            color_code_num = (joint_num // 4)
-            joint_color = [c + 35 * (joint_num % 4) for c in joint_color_code[color_code_num]]
-            cv2.circle(imgIn, center=(gtIn[joint_num][0], gtIn[joint_num][1]), radius=3, color=joint_color, thickness=-1)
-
-        for limb_num in range(len(limbs)):
-            x1 = gtIn[limbs[limb_num][0], 1]
-            y1 = gtIn[limbs[limb_num][0], 0]
-            x2 = gtIn[limbs[limb_num][1], 1]
-            y2 = gtIn[limbs[limb_num][1], 0]
-            length = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
-            if 5 < length < 150:
-                deg = math.degrees(math.atan2(x1 - x2, y1 - y2))
-                polygon = cv2.ellipse2Poly((int((y1 + y2) / 2), int((x1 + x2) / 2)),
-                                           (int(length / 2), 3),
-                                           int(deg),
-                                           0, 360, 1)
-                color_code_num = limb_num // 4
-                limb_color = [c + 35 * (limb_num % 4) for c in joint_color_code[color_code_num]]
-                cv2.fillConvexPoly(imgIn, polygon, color=limb_color)
-
-        if filename is not None:
-            cv2.imwrite(filename, imgIn)
-
-        return imgIn
-    
     def estimate_nimble(self):
         # テクスチャの投影と最適化
         self.project_texture_to_uv(self.background_image)
@@ -814,6 +725,75 @@ class Runner:
         assert len(proj_pts.shape) == 2
 
         return proj_pts
+
+    # skeleton
+    def render_skeleton(self):
+        """手のスケルトンをレンダリングし、画像として保存します。"""
+        joints_3d = self.gen_hand_joints_trans
+
+        # カメラパラメータの取得
+        K = self.K.detach().cpu().numpy()
+
+        # ジョイントの投影（3D -> 2D）
+        joints_2d = self.project_3D_points(K, joints_3d)
+
+        # 画像の解像度に合わせてスケール調整
+        joints_2d[:, 0] = joints_2d[:, 0]
+        joints_2d[:, 1] = self.resolution[0] - joints_2d[:, 1]
+
+        # スケルトンの描画
+        skeleton_image = self.showHandJoints(self.background_image, joints_2d)
+
+        # 反転
+        skeleton_image = cv2.flip(skeleton_image, 0)
+
+        # リサイズとパディング
+        # skeleton_image_uint8 = (skeleton_image * 255).astype(np.uint8)
+        skeleton_image_resized = resize_and_pad_image(skeleton_image)
+        self.replaced_skeleton = skeleton_image_resized
+
+    def showHandJoints(self, imgInOrg, gtIn, filename=None):
+        """手のジョイントとボーンを画像上に描画します。"""
+        imgIn = np.copy(imgInOrg)
+
+        # 指ごとに色を設定
+        joint_color_code = [[139, 53, 255],
+                            [0, 56, 255],
+                            [43, 140, 237],
+                            [37, 168, 36],
+                            [147, 147, 0],
+                            [70, 17, 145]]
+
+        limbs = [[0, 1],[1, 2],[2, 3],[3,17],[0, 4],[4, 5],[5, 6],[6, 18],[0, 7],[7, 8],[8, 9],[9, 19],
+                 [0, 10],[10, 11],[11, 12],[12, 20],[0, 13],[13, 14],[14, 15],[15, 16]]
+
+        gtIn = np.round(gtIn).astype(np.int32)
+
+        for joint_num in range(gtIn.shape[0]):
+            color_code_num = (joint_num // 4)
+            joint_color = [c + 35 * (joint_num % 4) for c in joint_color_code[color_code_num]]
+            cv2.circle(imgIn, center=(gtIn[joint_num][0], gtIn[joint_num][1]), radius=3, color=joint_color, thickness=-1)
+
+        for limb_num in range(len(limbs)):
+            x1 = gtIn[limbs[limb_num][0], 1]
+            y1 = gtIn[limbs[limb_num][0], 0]
+            x2 = gtIn[limbs[limb_num][1], 1]
+            y2 = gtIn[limbs[limb_num][1], 0]
+            length = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+            if 5 < length < 150:
+                deg = math.degrees(math.atan2(x1 - x2, y1 - y2))
+                polygon = cv2.ellipse2Poly((int((y1 + y2) / 2), int((x1 + x2) / 2)),
+                                           (int(length / 2), 3),
+                                           int(deg),
+                                           0, 360, 1)
+                color_code_num = limb_num // 4
+                limb_color = [c + 35 * (limb_num % 4) for c in joint_color_code[color_code_num]]
+                cv2.fillConvexPoly(imgIn, polygon, color=limb_color)
+
+        if filename is not None:
+            cv2.imwrite(filename, imgIn)
+
+        return imgIn
 
 
 def plot_mesh(verts, faces, names):
