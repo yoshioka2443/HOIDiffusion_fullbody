@@ -14,3 +14,10 @@ midas_models/
 models/
 outputs/
 wandb/
+sample/
+test_data/
+
+test_data_NIMBLE/
+test_data_blended/
+
+grabnet/logs/V00.log

@@ -681,3 +681,98 @@ class Runner:
         print(f"スケルトン画像を保存しました: {output_path}")
 
         return output_path
+
+            # def render_scene(self, scene="origin"):
+    #     if scene == "replaced":
+    #         print("Rendering replaced scene.")
+    #         hand_vertices = self.replaced_mano_vertices
+    #         object_vertices = self.replaced_object_vertices
+    #     else:
+    #         print("Rendering original scene.")
+    #         hand_vertices = self.original_hand_vertices
+    #         object_vertices = self.original_object_vertices
+        
+    #     """シーンをレンダリングします。"""
+    #     light = pyredner.AmbientLight(intensity=torch.tensor([1., 1., 1.]))
+    #     uvs = torch.stack([self.mano_layer.uv[..., 0], 1 - self.mano_layer.uv[..., 1]], -1)
+    #     vertex_normals = calc_vertex_normals(hand_vertices, self.mano_layer.faces)
+
+    #     hand = pyredner.Object(
+    #         vertices=hand_vertices,
+    #         indices=self.mano_layer.faces.to(torch.int32),
+    #         uvs=torch.tensor(uvs, dtype=torch.float32),
+    #         uv_indices=torch.tensor(self.mano_layer.face_uvs, dtype=torch.int32),
+    #         normals=torch.tensor(vertex_normals, dtype=torch.float32),
+    #         normal_indices=self.mano_layer.faces.to(torch.int32),
+    #         material=pyredner.Material(
+    #             diffuse_reflectance=self.mano_layer.tex_diffuse_mean.to(pyredner.get_device()),
+    #             specular_reflectance=self.mano_layer.tex_spec_mean.to(pyredner.get_device())
+    #         )
+    #     )
+
+    #     replacement_object = pyredner.Object(
+    #         vertices=object_vertices,
+    #         indices=self.replacement_object.indices.type(torch.int32),
+    #         uvs=self.replacement_object.uvs,
+    #         uv_indices=self.replacement_object.uv_indices,
+    #         material=self.replacement_object.material
+    #     )
+
+    #     # scene = pyredner.Scene(
+    #     #     camera=self.camera,
+    #     #     objects=[hand, replacement_object]
+    #     # )
+    #     # return pyredner.render_deferred(scene, lights=[light], alpha=True), pyredner.render_albedo(scene)
+    #     scene = pyredner.Scene(
+    #         camera=self.camera,
+    #         objects=[hand, replacement_object],
+    #         envmap=self.envmap
+    #     )
+        # if scene == "origin":
+        #     self.original_scene = pyredner.render_deferred(scene, lights=[light], alpha=True).cpu().detach().numpy()
+        #     self.original_albedo = pyredner.render_albedo(scene).cpu().detach().numpy()
+        # elif scene == "replaced":
+        #     self.replaced_scene = pyredner.render_deferred(scene, lights=[light], alpha=True).cpu().detach().numpy()
+        #     self.replaced_albedo = pyredner.render_albedo(scene).cpu().detach().numpy()
+    
+    # def render_depth(self, hand_vertices, object_vertices):
+    #     """シーンのデプス（深度）をレンダリングし、0から1の範囲に正規化してグレースケール画像として返します。"""
+    #     uvs = torch.stack([self.mano_layer.uv[..., 0], 1 - self.mano_layer.uv[..., 1]], -1)
+    #     vertex_normals = calc_vertex_normals(hand_vertices, self.mano_layer.faces)
+
+    #     hand = pyredner.Object(
+    #         vertices=hand_vertices,
+    #         indices=self.mano_layer.faces.to(torch.int32),
+    #         uvs=torch.tensor(uvs, dtype=torch.float32),
+    #         uv_indices=torch.tensor(self.mano_layer.face_uvs, dtype=torch.int32),
+    #         normals=torch.tensor(vertex_normals, dtype=torch.float32),
+    #         normal_indices=self.mano_layer.faces.to(torch.int32),
+    #         material=pyredner.Material(
+    #             diffuse_reflectance=self.mano_layer.tex_diffuse_mean.to(pyredner.get_device()),
+    #             specular_reflectance=self.mano_layer.tex_spec_mean.to(pyredner.get_device())
+    #         )
+    #     )
+    #     replacement_object = pyredner.Object(
+    #         vertices=object_vertices,
+    #         indices=self.replacement_object.indices.type(torch.int32),
+    #         uvs=self.replacement_object.uvs,
+    #         uv_indices=self.replacement_object.uv_indices,
+    #         material=self.replacement_object.material
+    #     )
+    #     scene = pyredner.Scene(
+    #         camera=self.camera,
+    #         objects=[hand, replacement_object]
+    #     )
+
+    #     g_buffer = pyredner.render_g_buffer(
+    #         scene=scene,
+    #         channels=[pyredner.channels.depth]
+    #     )
+    #     depth_map = g_buffer[..., 0]
+
+    #     # デプス値を0から1に正規化
+    #     min_depth = depth_map.min()
+    #     max_depth = depth_map.max()
+    #     normalized_depth = (depth_map - min_depth) / (max_depth - min_depth)
+
+    #     return normalized_depth
