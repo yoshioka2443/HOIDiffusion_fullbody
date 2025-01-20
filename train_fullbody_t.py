@@ -2,11 +2,11 @@ import cv2
 import torch
 import os
 from basicsr.utils import scandir, get_time_str, get_root_logger
-from ldm.data.dataset_reg import dataset_dex
+from ldm.data.dataset_reg_t import dataset_dex
 import argparse
 from omegaconf import OmegaConf
 from ldm.util import instantiate_from_config
-from ldm.modules.encoders.adapter import CoAdapter
+from ldm.modules.encoders.adapter_t import CoAdapter
 import numpy as np
 import torch.nn as nn
 import matplotlib.pyplot as plt
@@ -356,7 +356,8 @@ if __name__ == '__main__':
     midas.cuda()
     # Initialize sd model and adapter
     model = load_model_from_config(config, f"{opt.ckpt}").to(device)
-    model_ad = CoAdapter(w1 = 1, w2 = 1, w3 = 1).to(device) 
+    # model_ad = CoAdapter(w1 = 1, w2 = 1, w3 = 1).to(device) 
+    model_ad = CoAdapter(w1 = 1, w2 = 1, w3 = 1, w4 = 1).to(device) 
     # to gpus
     model_ad = torch.nn.parallel.DistributedDataParallel(
         model_ad,
@@ -469,11 +470,13 @@ if __name__ == '__main__':
                 normal = cc.float()
                 skeleton = data["skeleton"]
                 mask = data["mask"].float()
+                texture = data["texture"]
             else:
                 data = data["reg_data"]
                 normal = torch.zeros_like(data['im']).float()
                 skeleton = torch.zeros_like(data['im']).float()
                 mask = torch.zeros_like(data['im']).float()
+                texture = torch.zeros_like(data['im']).float()
             
             with torch.no_grad():
                 c = model.module.get_learned_conditioning(data['sentence'])
@@ -482,7 +485,8 @@ if __name__ == '__main__':
 
             optimizer.zero_grad()
             model.zero_grad()
-            features_adapter = model_ad(skeleton, normal, mask)
+            # features_adapter = model_ad(skeleton, normal, mask)
+            features_adapter = model_ad(texture, skeleton, normal, mask)
             l_pixel, loss_dict = model(z, c=c, features_adapter = features_adapter)
             l_pixel.backward()
             optimizer.step()

@@ -43,7 +43,8 @@ def main():
     print_device_info()
 
     # パラメータの設定
-    output_dir = 'test_data_sample'
+    # output_dir = 'test_data_sample'
+    output_dir = 'test_data_NIMBLE'
     sequence_name = 'GPMF12'
     frame_number = 250
     

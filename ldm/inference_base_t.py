@@ -4,7 +4,7 @@ from omegaconf import OmegaConf
 
 from ldm.models.diffusion.ddim import DDIMSampler
 from ldm.models.diffusion.plms import PLMSSampler
-from ldm.modules.encoders.adapter import Adapter, StyleAdapter, Adapter_light, CoAdapter
+from ldm.modules.encoders.adapter_t import Adapter, StyleAdapter, Adapter_light, CoAdapter
 from ldm.modules.extra_condition.api import ExtraCondition
 from ldm.util import fix_cond_shapes, load_model_from_config, read_state_dict
 
@@ -234,8 +234,8 @@ def get_adapters(opt, cond_type: ExtraCondition):
         cond_weight = getattr(opt, 'cond_weight')
     adapter['cond_weight'] = cond_weight
         
-    adapter['model'] = CoAdapter(w1 = 1, w2 = 1, w3 = 1).to(opt.device) 
-    # adapter['model'] = CoAdapter(w1 = 1, w2 = 1, w3 = 1, w4 = 1).to(opt.device)
+    # adapter['model'] = CoAdapter(w1 = 1, w2 = 1, w3 = 1).to(opt.device) 
+    adapter['model'] = CoAdapter(w1 = 1, w2 = 1, w3 = 1, w4 = 1).to(opt.device)
     # adapter['model'] = CoAdapter(w1 = 1, w2 = 1, w3 = 1, w4 = 1, w = 5).to(opt.device) 
 
     ckpt_path = getattr(opt, f'{cond_type.name}_adapter_ckpt', None)

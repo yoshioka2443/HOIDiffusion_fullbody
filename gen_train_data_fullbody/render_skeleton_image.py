@@ -14,36 +14,76 @@ from smplx.joint_names import JOINT_NAMES
 
 import math
 
+# SMPL skeleton
+# from skeleton_info import keypoint_info, skeleton_info 
+# from SMPLX2mmpose import convert_smplx_to_mmpose
 
-# SMPLXのスケルトン構造
-joint_dict = {name: i for i, name in enumerate(JOINT_NAMES)}
-bones = [
-    ['pelvis', 'spine1', 'spine2', 'spine3', 'neck', 'head'],
-    ['spine3', 'left_collar', 'left_shoulder', 'left_elbow'],
-    ['spine3', 'right_collar', 'right_shoulder', 'right_elbow'],
-    ["left_elbow", "left_wrist"], 
-    ["left_wrist", "left_index1", "left_index2","left_index3"],
-    ["left_wrist", "left_middle1", "left_middle2", "left_middle3"],
-    ["left_wrist", "left_pinky1", "left_pinky2","left_pinky3"],
-    ["left_wrist", "left_ring1", "left_ring2", "left_ring3"],
-    ['left_wrist', 'left_thumb1', 'left_thumb2', 'left_thumb3'],
-    ["right_elbow", "right_wrist"],
-    ["right_wrist", "right_index1", "right_index2","right_index3"],
-    ["right_wrist", "right_middle1", "right_middle2", "right_middle3"],
-    ["right_wrist", "right_pinky1", "right_pinky2","right_pinky3"],
-    ["right_wrist", "right_ring1", "right_ring2", "right_ring3"],
-    ['right_wrist', 'right_thumb1', 'right_thumb2', 'right_thumb3'],
-    ["right_eye_brow1","right_eye_brow2","right_eye_brow3","right_eye_brow4","right_eye_brow5"],
-    ["left_eye_brow1","left_eye_brow2","left_eye_brow3","left_eye_brow4","left_eye_brow5"],
-    ['nose1', 'nose2', 'nose3', 'nose4'],
-    # ['left_mouth_3', 'left_mouth_2', 'left_mouth_1', 'mouth_center', 'right_mouth_1', 'right_mouth_2', 'right_mouth_3'],
+# keypoint_infoの全体確認
+# print("keypoint_info:", keypoint_info)
+
+# # itemsのリスト化
+# items_list = list(keypoint_info.items())
+# print("items_list:", items_list)
+
+# # 最初のアイテムのキーと値の確認
+# print("First item key:", items_list[0][0])  # キー
+# print("First item value:", items_list[0][1])  # 値
+
+# # 値の中の "name" キーを確認
+# print("First item's name:", items_list[0][1]["name"])
+
+# # SMPLXのスケルトン構造
+# joint_dict = {name: i for i, name in enumerate(JOINT_NAMES)}
+# print(joint_dict)
+
+# items_list = list(keypoint_info.items())
+# joint_dict2 = {i: verts_dict["name"] for i, (_, verts_dict) in enumerate(items_list)}
+# print(joint_dict2)
+
+# ゴリ押し
+limbs_names = [
+    ("pelvis", "left_hip"),
+    ("pelvis", "right_hip"),
+    ("pelvis", "spine1"),
+    ("left_hip", "left_knee"),
+    ("right_hip", "right_knee"),
+    ("spine1", "spine2"),
+    ("left_knee", "left_ankle"),
+    ("right_knee", "right_ankle"),
+    ("spine2", "spine3"),
+    ("left_ankle", "left_foot"),
+    ("right_ankle", "right_foot"),
+    ("spine3", "neck"),
+    ("neck", "left_collar"),
+    ("neck", "right_collar"),
+    ("neck", "head"),
+    ("left_collar", "left_shoulder"),
+    ("right_collar", "right_shoulder"),
+    ("left_shoulder", "left_elbow"),
+    ("right_shoulder", "right_elbow"),
+    ("left_elbow", "left_wrist"),
+    ("right_elbow", "right_wrist"),
+    ("head", "jaw"),
+    ("head", "left_eye_smplhf"),
+    ("head", "right_eye_smplhf"),
 ]
+LIMBS = [ (0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (3, 6), (4, 7), (5, 8), (6, 9), (7, 10), (8, 11), (9, 12), (12, 13), (12, 14), (12, 15), (13, 16), (14, 17), (16, 18), (17, 19), (18, 20), (19, 21), (15, 22), (15, 23), (15, 24)]
 
-LIMBS = []
-for bone in bones:
-    for i in range(len(bone)-1):
-        LIMBS += [[joint_dict[bone[i]], joint_dict[bone[i+1]]]]
-print(LIMBS)
+# リムのペア
+# LIMBS = [
+#     (0, 1), (0, 2), (0, 3),  # 中心軸
+#     (2, 3), (3, 4), (4, 8),  # 右脚
+#     (5, 6), (6, 7), (7, 9),  # 左脚
+#     (0, 12), (12, 15),       # 上半身
+#     (12, 17), (17, 18), (18, 19), (19, 20),  # 右腕
+#     (12, 14), (14, 16), (16, 21), (21, 22)   # 左腕
+# ]
+
+LEFT_HAND_LIMBS = [ (20, 25), (25, 26), (26, 27), (20, 28), (28, 29), (29, 30), (20, 31), (31, 32), (32, 33), (20, 34), (34, 35), (35, 36), (20, 37), (37, 38), (38, 39)]
+RIGHT_HAND_LIMBS = [ (21, 40), (40, 41), (41, 42), (21, 43), (43, 44), (44, 45), (21, 46), (46, 47), (47, 48), (21, 49), (49, 50), (50, 51), (21, 52), (52, 53), (53, 54)]
+LIMBS += LEFT_HAND_LIMBS
+LIMBS += RIGHT_HAND_LIMBS
+
 
 
 def transform_world_to_camera(points_3d, R, T):
@@ -109,9 +149,10 @@ def draw_skeleton(image, joints_2d=None, vertices_2d=None, object_vertices_2d=No
 
 def draw_skeleton_for_train(image, joints_2d=None):
 
-    color_num = 22
     # 指ごとに色を設定
-    imgIn = np.copy(image)
+    # imgIn = np.copy(image)
+    imgIn = np.zeros_like(image)
+
     joint_color_code = [[139, 53, 255],
                         [0, 56, 255],
                         [43, 140, 237],
@@ -131,42 +172,87 @@ def draw_skeleton_for_train(image, joints_2d=None):
     # print("gtIn.shape[0]", gtIn.shape[0])
 
     for joint_num in range(gtIn.shape[0]):
-        color_code_num = (joint_num // color_num)
-        joint_color = [c + 35 * (joint_num % color_num) for c in joint_color_code[color_code_num]]
-        # print("joint_num", joint_num)
+        # color_code_num = (joint_num // color_num)
+        # joint_color = [c + 35 * (joint_num % color_num) for c in joint_color_code[color_code_num]]
+
+        if joint_num < 24:
+            color_num = 4
+            color_code_num = (joint_num // color_num)
+            joint_color = [c + 35 * (joint_num % color_num) for c in joint_color_code[color_code_num]]
+        elif joint_num < 39:
+            color_num = 3
+            color_code_num = ((joint_num - 24) // color_num)
+            joint_color = [c + 35 * ((joint_num - 24) % color_num) for c in joint_color_code[color_code_num]]
+        elif joint_num < 54:
+            color_num = 3
+            color_code_num = ((joint_num - 39) // color_num)
+            joint_color = [c + 35 * ((joint_num - 39) % color_num) for c in joint_color_code[color_code_num]]
+        else:
+            joint_color = [255, 255, 255]
+
+        # cv2.circle(imgIn, center=(gtIn[joint_num][0], gtIn[joint_num][1]), radius=3, color=joint_color, thickness=-1)
+        # x, y は int にキャストしてタプルで渡す
+        print("joint_num", joint_num)
         
         try:
-            # cv2.circle(imgIn, center=(gtIn[joint_num][0], gtIn[joint_num][1]), radius=3, color=joint_color, thickness=-1)
             x = int(joints_2d[joint_num, 0])
             y = int(joints_2d[joint_num, 1])
-            cv2.circle(imgIn, center=(x, y), radius=3, color=joint_color, thickness=-1)
-            
+            # cv2.circle(imgIn, center=(x, y), radius=3, color=joint_color, thickness=-1)
+            cv2.circle(imgIn, center=(x, y), radius=5, color=joint_color, thickness=-1)
         except:
             print("error", joint_num)
 
     for limb_num in range(len(limbs)):
+        print("limb_num", limb_num)
         x1 = gtIn[limbs[limb_num][0], 1]
         y1 = gtIn[limbs[limb_num][0], 0]
         x2 = gtIn[limbs[limb_num][1], 1]
         y2 = gtIn[limbs[limb_num][1], 0]
         length = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
-        if 5 < length < 150:
-            deg = math.degrees(math.atan2(x1 - x2, y1 - y2))
-            polygon = cv2.ellipse2Poly((int((y1 + y2) / 2), int((x1 + x2) / 2)),
-                                        (int(length / 2), 3),
-                                        int(deg),
-                                        0, 360, 1)
-            color_code_num = limb_num // color_num
+        # if 5 < length < 150:
+        #     deg = math.degrees(math.atan2(x1 - x2, y1 - y2))
+        #     polygon = cv2.ellipse2Poly((int((y1 + y2) / 2), int((x1 + x2) / 2)),
+        #                                 (int(length / 2), 3),
+        #                                 int(deg),
+        #                                 0, 360, 1)
+        #     color_code_num = limb_num // color_num
+        #     limb_color = [c + 35 * (limb_num % color_num) for c in joint_color_code[color_code_num]]
+        #     cv2.fillConvexPoly(imgIn, polygon, color=limb_color)
+        # else:
+        #     print("length", length)
+        deg = math.degrees(math.atan2(x1 - x2, y1 - y2))
+        polygon = cv2.ellipse2Poly((int((y1 + y2) / 2), int((x1 + x2) / 2)),
+                                    (int(length / 2), 3),
+                                    int(deg),
+                                    0, 360, 1)
+    
+        # color_code_num = limb_num // color_num
+        # limb_color = [c + 35 * (limb_num % color_num) for c in joint_color_code[color_code_num]]
+        if limb_num < 24:
+            color_num = 4
+            color_code_num = (limb_num // color_num)
             limb_color = [c + 35 * (limb_num % color_num) for c in joint_color_code[color_code_num]]
-            cv2.fillConvexPoly(imgIn, polygon, color=limb_color)
+        elif limb_num < 39:
+            color_num = 3
+            color_code_num = ((limb_num - 24) // color_num)
+            limb_color = [c + 35 * ((limb_num - 24) % color_num) for c in joint_color_code[color_code_num]]
+        elif limb_num < 54:
+            color_num = 3
+            color_code_num = ((limb_num - 39) // color_num)
+            limb_color = [c + 35 * ((limb_num - 39) % color_num) for c in joint_color_code[color_code_num]]
+        else:
+            limb_color = [255, 255,255]
+
+        cv2.fillConvexPoly(imgIn, polygon, color=limb_color)
     return imgIn
 
 def make_joints(
-    vertices_path = "/home/datasets/arctic/data/arctic_data/data/raw_seqs/s01/box_grab_01.smplx.npy", 
-    frame_idx=300, 
-    # smplx_model_path = "SMPLX_FEMALE.npz", 
-    smplx_model_path = "/home/datasets/arctic/data/body_models/smplx/SMPLX_FEMALE.npz", 
-    ):
+        vertices_path = "/home/datasets/arctic/data/arctic_data/data/raw_seqs/s01/box_grab_01.smplx.npy",
+        frame_idx=300, 
+        smplx_model_path = "/home/datasets/arctic/data/body_models/smplx", 
+        gender = 'female', 
+        vtemplate_path = "/home/datasets/arctic/data/arctic_data/data/meta/subject_vtemplates/s01.obj",
+        ):
     # 1. SMPLXレイヤーを初期化
     # smplxモデルのディレクトリを指定してください    
 
@@ -211,9 +297,16 @@ def make_joints(
     # batch_size = body_pose.shape[0]  # バッチサイズ
     batch_size = 1
     print(f"{batch_size=}")
+    
+    v_template = trimesh.load_mesh(vtemplate_path)
 
     # SMPLXレイヤーを初期化
-    smplx_layer = smplx.SMPLX(model_path=smplx_model_path, gender='neutral', batch_size=batch_size, use_pca=False)
+    smplx_layer = smplx.SMPLX(
+        model_path=smplx_model_path, 
+        gender=gender, 
+        v_template=v_template.vertices,
+        batch_size=batch_size, 
+        use_pca=False)
 
     # 3. SMPLXモデルに入力して関節を取得
     smplx_output = smplx_layer(
@@ -229,6 +322,8 @@ def make_joints(
 
     # 4. 関節位置を取得
     joints = smplx_output.joints  # (1, 127, 3) - 127個の関節の3D位置
+    # joints = joints[:, :25]  # 25個の関節のみを取得
+    joints = joints[:, :55]  # 55個の関節のみを取得
     return joints.detach().numpy()[0], smplx_output.vertices.detach().numpy()[0], smplx_layer.faces
 
 def main(
@@ -239,8 +334,10 @@ def main(
     object_file=None, 
     object_mesh_file=None, 
     misc_file=None,
-    frame_idx=300, 
-    show_plotly=False, is_ego=True):
+    subject='s01',
+    frame_idx=299, 
+    show_plotly=False, 
+    camera_idx=0):
     """
     メイン処理
     :param npy_file: 3D座標が保存されたnpyファイル
@@ -254,22 +351,27 @@ def main(
         misc_data = json.load(open(misc_file))
         print(misc_data)
         
-        cam1_Rt = np.array(misc_data['s01']['world2cam'][0])
-        cam1_K = np.array(misc_data['s01']['intris_mat'][0])
-        print(f"{cam1_Rt.shape=}")
-        print(f"{cam1_K.shape=}")
+        cams_Rt = np.array(misc_data[subject]['world2cam'])
+        cams_K = np.array(misc_data[subject]['intris_mat'])
+        print(f"{cams_Rt.shape=}")
+        print(f"{cams_K.shape=}")
+        
+        gender = misc_data[subject]['gender']
+    else:
+        gender = 'female'
     
     # 3D関節を読み込み
     # joints_3d = np.load(npy_file)  # shape: (NUM_JOINTS, 3)
 
-    joints_3d, smplx_vertices, smplx_faces = make_joints(npy_file, frame_idx=frame_idx)
+    joints_3d, smplx_vertices, smplx_faces = make_joints(npy_file, frame_idx=frame_idx, gender=gender)
     print(f"{joints_3d.shape=}")
     print(f"{smplx_vertices.shape=}")
 
     # カメラパラメータを読み込み
     camera_data = np.load(camera_file, allow_pickle=True).item()
+    print(camera_data.keys())
 
-    if is_ego:
+    if camera_idx == 0:  # egocentric camera
         # 内部パラメータ（intrinsics）
         intrinsics = np.array(camera_data['intrinsics'])  # shape: (3, 3)
 
@@ -281,6 +383,9 @@ def main(
         w2c[:3, :3] = R
         w2c[:3, 3:] = T
     else:
+        cam1_Rt = cams_Rt[camera_idx-1]
+        cam1_K = cams_K[camera_idx-1]
+        
         w2c = np.eye(4)
         w2c[:3, :3] = cam1_Rt[:3, :3] 
         w2c[:3, 3:] = cam1_Rt[:3, 3:]
@@ -328,6 +433,7 @@ def main(
         image = np.ones((int(intrinsics[1,2]*2), int(intrinsics[0,2]*2), 3), dtype=np.uint8) * 255
     else:
         image = np.array(Image.open(image_file))
+        print(f"{image.shape=}")
     
     dist_coeffs = np.array(camera_data['dist8'])
     # print(f"{intrinsics=}")
@@ -338,6 +444,8 @@ def main(
     # object_vertices_2d = None
     # output_image = draw_skeleton(image, joints_2d, vertices_2d, object_vertices_2d)
     output_image = draw_skeleton_for_train(image, joints_2d)
+    
+    print(f'{output_image.shape=}')
 
     # 出力
     fig, axs = plt.subplots(1, 2, figsize=(20, 10))
@@ -414,15 +522,26 @@ if __name__ == '__main__':
 
     # args = parser.parse_args()
     # main(args.npy_file, args.camera_file, args.image_file, args.output_file)
-
+    from pathlib import Path
     
-    npy_file = "/home/datasets/arctic/data/arctic_data/data/raw_seqs/s01/box_grab_01.smplx.npy"
-    camera_file = "/home/datasets/arctic/data/arctic_data/data/raw_seqs/s01/box_grab_01.egocam.dist.npy"
-    # object_mesh_file = "/home/datasets/arctic/data/arctic_data/data/meta/object_vtemplates/box/mesh.obj"
-    object_mesh_file = "/home/datasets/arctic/data/arctic_data/data/meta/subject_vtemplates/s01.obj"
-    object_file = "/home/datasets/arctic/data/arctic_data/data/raw_seqs/s01/box_grab_01.object.npy"
-    misc_file = "/home/datasets/arctic/data/arctic_data/data/meta/misc.json"
-    image_file = "/home/datasets/arctic/data/arctic_data/data/cropped_images/s01/box_grab_01/0/00300.jpg"
+    # data_dir = Path("/home/datasets/arctic/data/arctic_data/data")
+    # data_dir = Path("./data/arctic_data/data")
+    data_dir = Path("/home/datasets/arctic/data/arctic_data/data")
+
+    subject = "s01"
+    action = "box_grab_01"
+    object_name = "box"
+    frame_idx = 299
+    camera_idx = 0
+    
+    npy_file = data_dir / f"raw_seqs/{subject}/{action}.smplx.npy"
+    camera_file = data_dir / f"raw_seqs/{subject}/{action}.egocam.dist.npy"
+    object_mesh_file = data_dir / f"meta/object_vtemplates/{object_name}/mesh.obj"
+    # object_mesh_file = data_dir / "meta/subject_vtemplates/s01.obj"
+    object_file = data_dir / f"raw_seqs/{subject}/{action}.object.npy"
+    misc_file = data_dir / "meta/misc.json"
+    # image_file = data_dir / "cropped_images/s01/box_grab_01/0/00300.jpg"
+    image_file = f"/home/datasets/arctic/data/arctic_data/data/images/{subject}/{action}/{camera_idx}/{frame_idx+1:05d}.jpg"
     output_file = "skeleton_output.png"
     # npy_file = "box_grab_01.smplx.npy"
     # camera_file = "0/box_grab_01.egocam.dist.npy"
@@ -433,19 +552,23 @@ if __name__ == '__main__':
     # output_file = "skeleton_output.png"
 
     main(
-    npy_file=npy_file, 
-    camera_file=camera_file, 
-    image_file=image_file, 
-    output_file=output_file, 
-    misc_file=misc_file, 
-    object_file=object_file, 
-    object_mesh_file=object_mesh_file, 
-    frame_idx=299, 
-    show_plotly=True, is_ego=True)
+        npy_file=npy_file, 
+        camera_file=camera_file, 
+        image_file=image_file, 
+        output_file=output_file, 
+        misc_file=misc_file, 
+        object_file=object_file, 
+        object_mesh_file=object_mesh_file, 
+        frame_idx=frame_idx, 
+        subject=subject,
+        show_plotly=True, 
+        camera_idx=camera_idx)
     
     # allocentric camera
     # image_file = "1/00300.jpg"
-    image_file = "/home/datasets/arctic/data/arctic_data/data/cropped_images/s01/box_grab_01/1/00300.jpg"
+    # image_file = data_dir / "cropped_images/s01/box_grab_01/1/00300.jpg"
+    camera_idx = 1    
+    image_file = f"/home/datasets/arctic/data/arctic_data/data/images/{subject}/{action}/{camera_idx}/{frame_idx+1:05d}.jpg"
     output_file = "skeleton_output_allocentric.png"
     main(
         npy_file=npy_file, 
@@ -455,10 +578,27 @@ if __name__ == '__main__':
         misc_file=misc_file, 
         object_file=object_file, 
         object_mesh_file=object_mesh_file, 
-        frame_idx=299, 
-        show_plotly=True, is_ego=False)
+        frame_idx=frame_idx, 
+        subject=subject,
+        show_plotly=True, 
+        camera_idx=camera_idx)
     
 
 
 # %%
+camera_idx = 2    
+image_file = f"/home/datasets/arctic/data/arctic_data/data/images/{subject}/{action}/{camera_idx}/{frame_idx+1:05d}.jpg"
+output_file = f"skeleton_output_allocentric_{camera_idx}.png"
+main(
+    npy_file=npy_file, 
+    camera_file=camera_file, 
+    image_file=image_file, 
+    output_file=output_file, 
+    misc_file=misc_file, 
+    object_file=object_file, 
+    object_mesh_file=object_mesh_file, 
+    frame_idx=frame_idx, 
+    subject=subject,
+    show_plotly=True, 
+    camera_idx=camera_idx)
 # %%

@@ -21,3 +21,5 @@ test_data_NIMBLE/
 test_data_blended/
 
 grabnet/logs/V00.log
+
+**/*.png

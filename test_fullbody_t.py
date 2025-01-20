@@ -6,10 +6,10 @@ from basicsr.utils import tensor2img
 from pytorch_lightning import seed_everything
 from torch import autocast
 from dist_util import init_dist, master_only, get_bare_model, get_dist_info
-from ldm.inference_base import (diffusion_inference, get_adapters, get_base_argument_parser, get_sd_models)
-from ldm.modules.extra_condition import api
-from ldm.modules.extra_condition.api import (ExtraCondition, get_adapter_feature, get_cond_model)
-from ldm.data.dataset_grabnet import dataset_grabnet
+from ldm.inference_base_t import (diffusion_inference, get_adapters, get_base_argument_parser, get_sd_models)
+from ldm.modules.extra_condition import api_t
+from ldm.modules.extra_condition.api_t import (ExtraCondition, get_adapter_feature, get_cond_model)
+from ldm.data.dataset_grabnet_t import dataset_grabnet
 
 torch.set_grad_enabled(False)
 
@@ -84,7 +84,7 @@ def main():
     cond_model = None
     if opt.cond_inp_type == 'image':
         cond_model = get_cond_model(opt, getattr(ExtraCondition, which_cond)) # in our case, it is depth estimated data
-    process_cond_module = getattr(api, f'get_cond_{which_cond}')
+    process_cond_module = getattr(api_t, f'get_cond_{which_cond}')
 
     # prepare models
     sd_model, sampler = get_sd_models(opt)
@@ -123,7 +123,8 @@ def main():
         for _, batch in tqdm(enumerate(train_dataloader)):
             cond_mask = batch["seg"]
             depth = process_cond_module(opt, batch["depth"], cond_seg = None, cond_model = cond_model, cond_mask = cond_mask)
-            adapter_features, append_to_context = get_adapter_feature(batch["skeleton"].half().cuda(), depth.half().cuda(), batch["mask"].half().cuda(), adapter)
+            # adapter_features, append_to_context = get_adapter_feature(batch["skeleton"].half().cuda(), depth.half().cuda(), batch["mask"].half().cuda(), adapter)
+            adapter_features, append_to_context = get_adapter_feature(batch["texture"].half().cuda(), batch["skeleton"].half().cuda(), depth.half().cuda(), batch["mask"].half().cuda(), adapter)
             opt.prompt = batch["sentence"]
             result = diffusion_inference(opt, sd_model, sampler, adapter_features, append_to_context)
             for i in range(result.shape[0]):

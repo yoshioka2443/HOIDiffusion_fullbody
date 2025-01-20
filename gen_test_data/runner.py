@@ -34,8 +34,8 @@ from gen_test_data.image_edit import resize_and_pad_image
 import cv2
 
 # dataset_dir = '../datasets'
-# dataset_dir = "/home/projects/dataset"
-dataset_dir = "/workspace/dataset"
+dataset_dir = "/home/projects/dataset"
+# dataset_dir = "/workspace/dataset"
 
 def save_image(original_image, image_path, img=None):
     """画像を保存します。"""
