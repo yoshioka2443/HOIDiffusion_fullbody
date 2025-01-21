@@ -14,38 +14,18 @@ from smplx.joint_names import JOINT_NAMES
 from tqdm import tqdm
 import math
 
-limbs_names = [
-    ("pelvis", "left_hip"),
-    ("pelvis", "right_hip"),
-    ("pelvis", "spine1"),
-    ("left_hip", "left_knee"),
-    ("right_hip", "right_knee"),
-    ("spine1", "spine2"),
-    ("left_knee", "left_ankle"),
-    ("right_knee", "right_ankle"),
-    ("spine2", "spine3"),
-    ("left_ankle", "left_foot"),
-    ("right_ankle", "right_foot"),
-    ("spine3", "neck"),
-    ("neck", "left_collar"),
-    ("neck", "right_collar"),
-    ("neck", "head"),
-    ("left_collar", "left_shoulder"),
-    ("right_collar", "right_shoulder"),
-    ("left_shoulder", "left_elbow"),
-    ("right_shoulder", "right_elbow"),
-    ("left_elbow", "left_wrist"),
-    ("right_elbow", "right_wrist"),
-    ("head", "jaw"),
-    ("head", "left_eye_smplhf"),
-    ("head", "right_eye_smplhf"),
-]
 LIMBS = [ (0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (3, 6), (4, 7), (5, 8), (6, 9), (7, 10), (8, 11), (9, 12), (12, 13), (12, 14), (12, 15), (13, 16), (14, 17), (16, 18), (17, 19), (18, 20), (19, 21), (15, 22), (15, 23), (15, 24)]
-
 LEFT_HAND_LIMBS = [ (20, 25), (25, 26), (26, 27), (20, 28), (28, 29), (29, 30), (20, 31), (31, 32), (32, 33), (20, 34), (34, 35), (35, 36), (20, 37), (37, 38), (38, 39)]
 RIGHT_HAND_LIMBS = [ (21, 40), (40, 41), (41, 42), (21, 43), (43, 44), (44, 45), (21, 46), (46, 47), (47, 48), (21, 49), (49, 50), (50, 51), (21, 52), (52, 53), (53, 54)]
 LIMBS += LEFT_HAND_LIMBS
 LIMBS += RIGHT_HAND_LIMBS
+
+joint_color_code = [[139, 53, 255],
+                    [0, 56, 255],
+                    [43, 140, 237],
+                    [37, 168, 36],
+                    [147, 147, 0],
+                    [70, 17, 145]]
 
 def transform_world_to_camera(points_3d, R, T):
     """
@@ -84,14 +64,6 @@ def make_joints(
         gender = 'female', 
         vtemplate_path = "/home/datasets/arctic/data/arctic_data/data/meta/subject_vtemplates/s01.obj",
         ):
-    # 1. SMPLXレイヤーを初期化
-    # smplxモデルのディレクトリを指定してください    
-
-    # 2. 入力データの準備
-    # body_pose: 69次元 (23関節 × 3軸の回転)
-    # global_orient: 3次元 (全身の回転)
-    # transl: 3次元 (全身の位置)
-    # 必要に応じて`.npy`ファイルからデータを読み込みます
 
     data = np.load(vertices_path, allow_pickle=True)
     data = data.item()
@@ -118,17 +90,7 @@ def make_joints(
     leye_pose = leye_pose[frame_idx].unsqueeze(0)
     reye_pose = reye_pose[frame_idx].unsqueeze(0)
 
-    # データの形状を確認
-    # print("body_pose shape:", body_pose.shape) # (1, 69)
-    # print("global_orient shape:", global_orient.shape) # (1, 3)
-    # print("transl shape:", transl.shape) # (1, 3)
-    # print(f"{left_hand_pose.shape=}")
-    # print(f"{right_hand_pose.shape=}")
-
-    # batch_size = body_pose.shape[0]  # バッチサイズ
     batch_size = 1
-    # print(f"{batch_size=}")
-    
     v_template = trimesh.load_mesh(vtemplate_path)
 
     # SMPLXレイヤーを初期化
@@ -159,68 +121,20 @@ def make_joints(
 
 
 def draw_skeleton_for_train(image, joints_2d=None):
-
-    color_num = 10
-    # 指ごとに色を設定
-    # imgIn = np.copy(image)
     imgIn = np.zeros_like(image)
 
-    joint_color_code = [[139, 53, 255],
-                        [0, 56, 255],
-                        [43, 140, 237],
-                        [37, 168, 36],
-                        [147, 147, 0],
-                        [70, 17, 145]]
-    limbs = LIMBS
-    # print("limbs_len=", len(limbs))
-    
-    gtIn = joints_2d
-
-    for joint_num in range(gtIn.shape[0]):
-        # color_code_num = (joint_num // color_num)
-        # joint_color = [c + 35 * (joint_num % color_num) for c in joint_color_code[color_code_num]]
-
-        if joint_num < 24:
-            color_num = 4
-            color_code_num = (joint_num // color_num)
-            joint_color = [c + 35 * (joint_num % color_num) for c in joint_color_code[color_code_num]]
-        elif joint_num < 39:
-            color_num = 3
-            color_code_num = ((joint_num - 24) // color_num)
-            joint_color = [c + 35 * ((joint_num - 24) % color_num) for c in joint_color_code[color_code_num]]
-        elif joint_num < 54:
-            color_num = 3
-            color_code_num = ((joint_num - 39) // color_num)
-            joint_color = [c + 35 * ((joint_num - 39) % color_num) for c in joint_color_code[color_code_num]]
-        else:
-            joint_color = [255, 255, 255]
-        
-        # cv2.circle(imgIn, center=(gtIn[joint_num][0], gtIn[joint_num][1]), radius=3, color=joint_color, thickness=-1)
-        # x, y は int にキャストしてタプルで渡す
-        # print("joint_num", joint_num)
-        
-        try:
-            x = int(joints_2d[joint_num, 0])
-            y = int(joints_2d[joint_num, 1])
-            # cv2.circle(imgIn, center=(x, y), radius=3, color=joint_color, thickness=-1)
-            # cv2.circle(imgIn, center=(x, y), radius=5, color=joint_color, thickness=-1)
-        except:
-            print("error", joint_num)
-
-    for limb_num in range(len(limbs)):
+    for limb_num in range(len(LIMBS)):
         # print("limb_num", limb_num)
-        x1 = gtIn[limbs[limb_num][0], 1]
-        y1 = gtIn[limbs[limb_num][0], 0]
-        x2 = gtIn[limbs[limb_num][1], 1]
-        y2 = gtIn[limbs[limb_num][1], 0]
+        x1 = joints_2d[LIMBS[limb_num][0], 1]
+        y1 = joints_2d[LIMBS[limb_num][0], 0]
+        x2 = joints_2d[LIMBS[limb_num][1], 1]
+        y2 = joints_2d[LIMBS[limb_num][1], 0]
         length = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
         deg = math.degrees(math.atan2(x1 - x2, y1 - y2))
         polygon = cv2.ellipse2Poly((int((y1 + y2) / 2), int((x1 + x2) / 2)),
                                     (int(length / 2), 3),
                                     int(deg),
                                     0, 360, 1)
-        # color_code_num = limb_num // color_num
-        # limb_color = [c + 35 * (limb_num % color_num) for c in joint_color_code[color_code_num]]
         if limb_num < 24:
             color_num = 4
             color_code_num = (limb_num // color_num)
@@ -239,7 +153,7 @@ def draw_skeleton_for_train(image, joints_2d=None):
     return imgIn
 
 def main(
-    subject, action, object_name, camera_idx, data_dir, output_dir):
+    subject, action, object_name, camera_idx, data_dir, output_dir, frame_idx, retake=False):
     """
     メイン処理
     :param npy_file: 3D座標が保存されたnpyファイル
@@ -248,109 +162,138 @@ def main(
     :param output_file: 出力画像ファイル
     """
 
-    npy_file = data_dir / f"raw_seqs/{subject}/{action}.smplx.npy"
-    camera_file = data_dir / f"raw_seqs/{subject}/{action}.egocam.dist.npy"
     object_mesh_file = data_dir / f"meta/object_vtemplates/{object_name}/mesh.obj"
-    object_file = data_dir / f"raw_seqs/{subject}/{action}.object.npy"
-    # print(npy_file, camera_file, image_file, output_file, frame_idx)
+    
+    if retake == "retake":
+        camera_file = data_dir / f"raw_seqs/{subject}/{action}_retake.egocam.dist.npy"
+        object_file = data_dir / f"raw_seqs/{subject}/{action}_retake.object.npy"
+        npy_file = data_dir / f"raw_seqs/{subject}/{action}_retake.smplx.npy"
+    elif retake == "retake2":
+        camera_file = data_dir / f"raw_seqs/{subject}/{action}_retake2.egocam.dist.npy"
+        object_file = data_dir / f"raw_seqs/{subject}/{action}_retake2.object.npy"
+        npy_file = data_dir / f"raw_seqs/{subject}/{action}_retake2.smplx.npy"
+    else:
+        camera_file = data_dir / f"raw_seqs/{subject}/{action}.egocam.dist.npy"
+        object_file = data_dir / f"raw_seqs/{subject}/{action}.object.npy"
+        npy_file = data_dir / f"raw_seqs/{subject}/{action}.smplx.npy"
 
     misc_file = data_dir / "meta/misc.json"
     if misc_file is not None:
         misc_data = json.load(open(misc_file))
-        # print(misc_data)
-        
         cams_Rt = np.array(misc_data[subject]['world2cam'])
         cams_K = np.array(misc_data[subject]['intris_mat'])
-        # print(f"{cams_Rt.shape=}")
-        # print(f"{cams_K.shape=}")
-        
         gender = misc_data[subject]['gender']
     else:
         gender = 'female'
 
-    frame_num = 783
-    for frame_idx in tqdm(range(frame_num)):
-        # カメラパラメータを読み込み
-        camera_data = np.load(camera_file, allow_pickle=True).item()
+    # カメラパラメータを読み込み
+    camera_data = np.load(camera_file, allow_pickle=True).item()
 
-        if camera_idx == 0:  # egocentric camera
-            # 内部パラメータ（intrinsics）
-            intrinsics = np.array(camera_data['intrinsics'])  # shape: (3, 3)
+    if camera_idx == 0:  # egocentric camera
+        # 内部パラメータ（intrinsics）
+        intrinsics = np.array(camera_data['intrinsics'])  # shape: (3, 3)
 
-            # 外部パラメータ（R: 回転行列, T: 平行移動ベクトル）
-            R = camera_data['R_k_cam_np'][frame_idx]  # shape: (3, 3)
-            T = camera_data['T_k_cam_np'][frame_idx]  # shape: (3,)
-            
-            w2c = np.eye(4)
-            w2c[:3, :3] = R
-            w2c[:3, 3:] = T
-        else:
-            cam1_Rt = cams_Rt[camera_idx-1]
-            cam1_K = cams_K[camera_idx-1]
-            
-            w2c = np.eye(4)
-            w2c[:3, :3] = cam1_Rt[:3, :3] 
-            w2c[:3, 3:] = cam1_Rt[:3, 3:]
-            intrinsics = cam1_K    
+        # 外部パラメータ（R: 回転行列, T: 平行移動ベクトル）
+        R = camera_data['R_k_cam_np'][frame_idx]  # shape: (3, 3)
+        T = camera_data['T_k_cam_np'][frame_idx]  # shape: (3,)
         
-        c2w = np.linalg.inv(w2c)
-    
-        # 3D関節を読み込み
-        joints_3d, smplx_vertices, smplx_faces = make_joints(npy_file, frame_idx=frame_idx, gender=gender)    
-
-        # ワールド座標をカメラ座標系に変換
-        joints_camera = joints_3d @ w2c[:3, :3].T + w2c[:3, 3:].T
-    
-        # 2D座標に投影
-        joints_2d = project_3D_to_2D(joints_camera, intrinsics, cut_negativeZ=False)
-
-        # smplxメッシュを2D座標に変換    
-        vertices_camera = smplx_vertices @ w2c[:3, :3].T + w2c[:3, 3:].T
-        vertices_2d = project_3D_to_2D(vertices_camera, intrinsics, cut_negativeZ=False)
-
-        # # 背景画像を読み込み
-        image_file = data_dir / f"images/{subject}/{action}/{camera_idx}/{frame_idx+1:05d}.jpg"
-        if image_file is None:
-            image = np.ones((int(intrinsics[1,2]*2), int(intrinsics[0,2]*2), 3), dtype=np.uint8) * 255
-        else:
-            image = np.array(Image.open(image_file))
-            # print(f"{image.shape=}")
-    
+        w2c = np.eye(4)
+        w2c[:3, :3] = R
+        w2c[:3, 3:] = T
+    else:
+        cam1_Rt = cams_Rt[camera_idx-1]
+        cam1_K = cams_K[camera_idx-1]
         
-        # スケルトンを描画
-        output_image = draw_skeleton_for_train(image, joints_2d)
+        w2c = np.eye(4)
+        w2c[:3, :3] = cam1_Rt[:3, :3] 
+        w2c[:3, 3:] = cam1_Rt[:3, 3:]
+        intrinsics = cam1_K    
     
-        # print(f'{output_image.shape=}') 
+    c2w = np.linalg.inv(w2c)
 
-        # 出力
-        # fig, axs = plt.subplots(1, 2, figsize=(20, 10))
-        # axs[0].imshow(image)
-        # axs[1].imshow(output_image)
-        # plt.show()
-        # output_file = output_dir / f"{frame_idx:04d}.png"
-        output_file = os.path.join(output_dir, f"{frame_idx:04d}.png")
-        cv2.imwrite(output_file, cv2.cvtColor(output_image, cv2.COLOR_RGB2BGR))
-    print(f"スケルトン画像を保存しました: {output_dir}")
+    # 3D関節を読み込み
+    joints_3d, smplx_vertices, smplx_faces = make_joints(npy_file, frame_idx=frame_idx, gender=gender)    
+
+    # ワールド座標をカメラ座標系に変換
+    joints_camera = joints_3d @ w2c[:3, :3].T + w2c[:3, 3:].T
+
+    # 2D座標に投影
+    joints_2d = project_3D_to_2D(joints_camera, intrinsics, cut_negativeZ=False)
+
+    # smplxメッシュを2D座標に変換    
+    vertices_camera = smplx_vertices @ w2c[:3, :3].T + w2c[:3, 3:].T
+    vertices_2d = project_3D_to_2D(vertices_camera, intrinsics, cut_negativeZ=False)
+
+    # # 背景画像を読み込み
+    # image_file = data_dir / f"images/{subject}/{action}/{camera_idx}/{frame_idx+1:05d}.jpg"
+    image_file = "/home/datasets/arctic/data/arctic_data/data/images/s01/capsulemachine_use_01/1/00001.jpg"
+    if image_file is None:
+        image = np.ones((int(intrinsics[1,2]*2), int(intrinsics[0,2]*2), 3), dtype=np.uint8) * 255
+    else:
+        image = np.array(Image.open(image_file))
+    
+    # スケルトンを描画
+    output_image = draw_skeleton_for_train(image, joints_2d)
+    output_file = os.path.join(output_dir, f"{frame_idx:04d}.png")
+    cv2.imwrite(output_file, cv2.cvtColor(output_image, cv2.COLOR_RGB2BGR))    
 
 
 if __name__ == '__main__':
     from pathlib import Path
     data_dir = Path("/home/datasets/arctic/data/arctic_data/data")
-
-    subject = "s01"
-    action = "capsulemachine_use_01"
-    object_name = "capsulemachine"
-    # frame_idx = 299
-    camera_idx = 1
-
-    output_dir = "/home/datasets/train_fullbody/skeleton"
+    output_dir = Path("/home/datasets/train_fullbody_goal_skeleton")
     os.makedirs(output_dir, exist_ok=True)
 
-    main(
-        subject=subject,
-        action=action,
-        object_name=object_name,
-        camera_idx=camera_idx,
-        data_dir=data_dir,
-        output_dir=output_dir,
-    )
+    # num = 0
+    # image_num = 30
+    frame_sequence = 100
+    dirpath_for_loop = "/home/datasets/arctic/render_out"
+    scene_list = os.listdir(dirpath_for_loop)
+
+    for scene in tqdm(scene_list):
+        parts = scene.split("_")
+        scene_name, object_name, action, object_num = parts[:4]
+        if parts[4]=="retake":
+            retake = parts[4]
+        elif parts[4]=="retake2":
+            retake = parts[4]
+        else:
+            retake = None
+        
+        camera_name = parts[4] if (retake == None) else parts[5]
+        camera_idx = int(camera_name)
+        if scene_name == "s01" or scene_name == "s02" or scene_name == "s03" or scene_name == "s04" or scene_name == "s05":
+            continue
+
+        input_dir_for_frame = os.path.join(dirpath_for_loop, scene, "images", "rgb")
+        frame_list = os.listdir(input_dir_for_frame)
+
+        # 処理対象のフレームを事前にフィルタリング
+        filtered_frames = [
+            frame for frame in frame_list if int(frame.split(".")[0]) % frame_sequence == 0
+        ]
+        filtered_frames.sort(key=lambda x: int(x.split(".")[0]))  # ソートして順序を保持
+
+        output_path = os.path.join(output_dir, scene)
+        os.makedirs(output_path, exist_ok=True)
+
+
+        for frame in tqdm(filtered_frames):
+            frame_idx = int(frame.split(".")[0])
+            main(
+                subject=scene_name,
+                action=f"{object_name}_{action}_{object_num}",
+                object_name=object_num,
+                camera_idx=camera_idx,
+                data_dir=data_dir,
+                output_dir=output_path,
+                frame_idx=frame_idx,
+                retake=retake
+            )
+        #     num += 1
+        #     if num >= image_num:
+        #         break
+        # if num >= image_num:
+        #     break
+    
+    print(f"スケルトン画像を保存しました: {output_dir}")

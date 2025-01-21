@@ -78,7 +78,7 @@ def draw_skeleton(image, joints_2d=None):
         cv2.fillConvexPoly(imgIn, polygon, color=limb_color)
     return imgIn
 
-def render_skeleton(obj_file_path, sbj_file_path):
+def render_skeleton(obj_file_path, sbj_file_path, root_dir):
     # Load joints and vertices data
     obj_mesh = trimesh.load(obj_file_path)
     sbj_mesh = trimesh.load(sbj_file_path)
@@ -139,32 +139,29 @@ def render_skeleton(obj_file_path, sbj_file_path):
 
     # Save the image
     output_path = "output_skeleton.png"
+    output_path = os.path.join(root_dir, output_path)
     cv2.imwrite(output_path, cv2.cvtColor(rendered_image, cv2.COLOR_RGB2BGR))
     
     print(f"Rendered image saved at {output_path}")
 
-def generate_depth_and_mask(obj_file_path, sbj_file_path, output_size=(512, 512)):
+
+def generate_depth_and_mask(obj_file_path, sbj_file_path, root_dir, output_size=(512, 512)):
     # Load meshes
     obj_mesh = trimesh.load(obj_file_path)
     sbj_mesh = trimesh.load(sbj_file_path)
 
-    # マテリアルを作成して色を設定
-    sbj_material = pyrender.MetallicRoughnessMaterial(
-        baseColorFactor=[150, 150, 150, 1.0]  # RGBAとして設定
-    )
-    obj_material = pyrender.MetallicRoughnessMaterial(
-        baseColorFactor=[100, 100, 100, 1.0]  # RGBAとして設定
-    )
+    obj_mesh.visual.vertex_colors = np.array([[100, 100, 100, 255]] * len(obj_mesh.vertices))
+    sbj_mesh.visual.vertex_colors = np.array([[150, 150, 150, 255]] * len(sbj_mesh.vertices))
 
     # Create PyRender scene
-    scene = pyrender.Scene()
+    scene = pyrender.Scene(bg_color=[0, 0, 0])
 
     # Add object mesh
-    obj_mesh_node = pyrender.Mesh.from_trimesh(obj_mesh, smooth=False, material=obj_material)
+    obj_mesh_node = pyrender.Mesh.from_trimesh(obj_mesh, smooth=False)
     obj_node = scene.add(obj_mesh_node, name="object")
 
     # Add subject (SMPLX) mesh
-    sbj_mesh_node = pyrender.Mesh.from_trimesh(sbj_mesh, smooth=False, material=sbj_material)
+    sbj_mesh_node = pyrender.Mesh.from_trimesh(sbj_mesh, smooth=False)
     sbj_node = scene.add(sbj_mesh_node, name="subject")
 
     # Setup camera
@@ -180,55 +177,41 @@ def generate_depth_and_mask(obj_file_path, sbj_file_path, output_size=(512, 512)
 
     # Render offscreen
     renderer = pyrender.OffscreenRenderer(*output_size)
-    # color, depth = renderer.render(scene)
     color, depth = renderer.render(scene, flags=pyrender.constants.RenderFlags.FLAT)
 
-    # Normalize depth for visualization
-    # depth_normalized = (depth - np.min(depth)) / (np.max(depth) - np.min(depth))
-    # depth_image = np.where(depth > 0, (1 - depth_normalized) * 255, 0).astype(np.uint8)
+    # Create segmentation image
+    segmentation = color.copy()
 
+    # Create depth image
     depth_valid = depth[depth > 0]
     min_depth = np.min(depth_valid)
     depth_normalized = (depth - min_depth) / (np.max(depth) - min_depth)
     depth_image = np.where(depth > 0, (1 - depth_normalized) * 255, 0).astype(np.uint8)
 
-    # Create segmentation image
-    segmentation = np.zeros_like(color, dtype=np.uint8)
-
-    # Mask for the object (based on depth)
-    obj_mask = (depth > 0).astype(np.uint8)
-    scene.remove_node(sbj_node)  # Remove subject mesh temporarily
-    _, obj_depth = renderer.render(scene)
-    
-    # Mask for the subject (based on depth)
-    scene.add(sbj_mesh_node)  # Add subject mesh back
-    scene.remove_node(obj_node)  # Remove object mesh temporarily
-    _, sbj_depth = renderer.render(scene)
-
-    sbj_mask = (sbj_depth > obj_depth).astype(np.uint8)
-    segmentation[sbj_mask == 1] = [150, 150, 150]  # Blue for subject
-    obj_mask = ((obj_depth > 0) & (obj_depth > sbj_depth - 1)).astype(np.uint8)
-    segmentation[obj_mask == 1] = [100, 100, 100]  # Red for object
-
     # Create mask
     mask = np.where(depth > 0, 255, 0).astype(np.uint8)
 
     # Save results
-    cv2.imwrite("output_depth.png", depth_image)
-    cv2.imwrite("output_seg.png", mask)
-    cv2.imwrite("output_mask.png", segmentation)
+    # cv2.imwrite("output_depth.png", depth_image)
+    # cv2.imwrite("output_seg.png", mask)
+    # cv2.imwrite("output_mask.png", segmentation)
 
-    cv2.imwrite("output_color.png", cv2.cvtColor(color, cv2.COLOR_RGB2BGR))
+    cv2.imwrite(os.path.join(root_dir, "output_depth.png"), depth_image)
+    cv2.imwrite(os.path.join(root_dir, "output_seg.png"), mask)
+    cv2.imwrite(os.path.join(root_dir, "output_mask.png"), segmentation)
 
     print("Depth and mask images have been saved!")
 
 # Main function
 def main():
-    obj_file_path = "/home/datasets/GOAL/results/apple_grasp/0000_obj.ply"
-    sbj_file_path = "/home/datasets/GOAL/results/apple_grasp/0000_sbj_refine.ply"
+    # obj_file_path = "/home/datasets/GOAL/results/apple_grasp/0000_obj.ply"
+    # sbj_file_path = "/home/datasets/GOAL/results/apple_grasp/0000_sbj_refine.ply"
+    root_dir = "/home/datasets/fullbody_test_goal"
+    obj_file_path = "/home/datasets/GOAL/results/binoculars_grasp/0003_obj.ply"
+    sbj_file_path = "/home/datasets/GOAL/results/binoculars_grasp/0003_sbj_refine.ply"
 
-    generate_depth_and_mask(obj_file_path, sbj_file_path)
-    render_skeleton(obj_file_path, sbj_file_path)
+    generate_depth_and_mask(obj_file_path, sbj_file_path, root_dir)
+    render_skeleton(obj_file_path, sbj_file_path, root_dir)
 
 if __name__ == "__main__":
     main()
