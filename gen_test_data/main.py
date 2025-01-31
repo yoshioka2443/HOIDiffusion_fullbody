@@ -9,7 +9,7 @@ import csv  # 追加
 # サードパーティライブラリのインポート
 import numpy as np
 import torch
-import plotly.graph_objects as go
+# import plotly.graph_objects as go
 
 # カスタムモジュールのインポート
 current_dir = os.path.dirname(__file__)
@@ -44,7 +44,7 @@ def main():
 
     # パラメータの設定
     # output_dir = 'test_data_sample'
-    output_dir = 'test_data_NIMBLE'
+    output_dir = 'test_data_original_red'
     sequence_name = 'GPMF12'
     frame_number = 250
     

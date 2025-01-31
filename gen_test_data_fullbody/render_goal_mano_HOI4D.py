@@ -32,6 +32,65 @@ RIGHT_HAND_LIMBS = [ (21, 40), (40, 41), (41, 42), (21, 43), (43, 44), (44, 45),
 LIMBS += LEFT_HAND_LIMBS
 LIMBS += RIGHT_HAND_LIMBS
 
+def depth_min_max(obj_file_path, sbj_file_path, output_size=(1024, 1024)):
+    # Create PyRender scene
+    scene = pyrender.Scene(bg_color=[0, 0, 0])
+
+    sbj_mesh = trimesh.load(sbj_file_path)
+    sbj_mesh_node = pyrender.Mesh.from_trimesh(sbj_mesh, smooth=False)
+    sbj_node = scene.add(sbj_mesh_node, name="subject")
+
+    obj_mesh = trimesh.load(obj_file_path)
+    obj_mesh_node = pyrender.Mesh.from_trimesh(obj_mesh, smooth=False)
+    obj_node = scene.add(obj_mesh_node, name="object")
+
+    # Setup camera
+    camera = pyrender.PerspectiveCamera(yfov=np.pi / 3.0)
+    camera_pose = np.eye(4)
+    camera_pose[:3, 3] = [0, 1, 1.5]
+
+    scene.add(camera, pose=camera_pose)
+
+    # Render offscreen
+    renderer = pyrender.OffscreenRenderer(*output_size)
+    color, depth = renderer.render(scene, flags=pyrender.constants.RenderFlags.FLAT)
+
+    # Create depth image
+    # print("min depth:", np.min(depth))
+    # print("max depth:", np.max(depth))
+    # depth_valid = depth[depth > 0]
+    # min_depth = np.min(depth_valid)
+    # max_depth = np.max(depth_valid)
+
+    depth_valid = depth[depth > 0]
+    min_depth = np.min(depth_valid)
+    max_depth = np.max(depth)
+    return min_depth, max_depth
+
+
+def extract_mano_from_smplx(sbj_mesh, hand="right"):
+    """
+    Extracts the hand mesh from an SMPLX mesh
+    hand: "right" or "left"
+    """
+    # smplx_to_mano_indices = np.load("mano_indices.npy")  # Precomputed MANO indices from SMPLX
+    smplx_to_mano_indices = np.load("/home/datasets/arctic/data/body_models/mano/MANO_SMPLX_vertex_ids.pkl", allow_pickle=True)
+    if hand == "right":
+        mano_indices = smplx_to_mano_indices["right_hand"]
+    else:
+        mano_indices = smplx_to_mano_indices["left_hand"]
+    
+    mano_vertices = sbj_mesh.vertices[mano_indices]
+    # mano_faces = sbj_mesh.faces[mano_indices]  # Faces must be filtered accordingly
+    if hand == "left":
+        mano_pkl = np.load("/home/datasets/arctic/data/body_models/mano/MANO_LEFT.pkl", allow_pickle=True, encoding="latin1")
+    else:
+        mano_pkl = np.load("/home/datasets/arctic/data/body_models/mano/MANO_RIGHT.pkl", allow_pickle=True, encoding="latin1")
+    
+    mano_faces = mano_pkl["f"]
+
+    return trimesh.Trimesh(vertices=mano_vertices, faces=mano_faces, process=False)
+
 def draw_skeleton(image, joints_2d=None):
     imgIn = np.zeros_like(image)
     joint_color_code = [[139, 53, 255],
@@ -42,29 +101,6 @@ def draw_skeleton(image, joints_2d=None):
                         [70, 17, 145]]
 
     limbs = LIMBS
-
-    # for joint_num in range(joints_2d.shape[0]):
-    #     if joint_num < 24:
-    #         color_num = 4
-    #         color_code_num = (joint_num // color_num)
-    #         joint_color = [c + 35 * (joint_num % color_num) for c in joint_color_code[color_code_num]]
-    #     elif joint_num < 39:
-    #         color_num = 3
-    #         color_code_num = ((joint_num - 24) // color_num)
-    #         joint_color = [c + 35 * ((joint_num - 24) % color_num) for c in joint_color_code[color_code_num]]
-    #     elif joint_num < 54:
-    #         color_num = 3
-    #         color_code_num = ((joint_num - 39) // color_num)
-    #         joint_color = [c + 35 * ((joint_num - 39) % color_num) for c in joint_color_code[color_code_num]]
-    #     else:
-    #         joint_color = [255, 255, 255]
-        
-    #     try:
-    #         x = int(joints_2d[joint_num, 0])
-    #         y = int(joints_2d[joint_num, 1])
-    #         cv2.circle(imgIn, center=(x, y), radius=1, color=joint_color, thickness=-1)
-    #     except:
-    #         print("error", joint_num)
 
     for limb_num in range(len(limbs)):
         x1 = joints_2d[limbs[limb_num][0], 1]
@@ -79,9 +115,10 @@ def draw_skeleton(image, joints_2d=None):
                                     0, 360, 1)
 
         if limb_num < 24:
-            color_num = 4
-            color_code_num = (limb_num // color_num)
-            limb_color = [c + 35 * (limb_num % color_num) for c in joint_color_code[color_code_num]]
+            continue
+            # color_num = 4
+            # color_code_num = (limb_num // color_num)
+            # limb_color = [c + 35 * (limb_num % color_num) for c in joint_color_code[color_code_num]]
         elif limb_num < 39:
             color_num = 3
             color_code_num = ((limb_num - 24) // color_num)
@@ -101,12 +138,8 @@ def render_skeleton(obj_file_path, sbj_file_path, output_size=(1024, 1024)):
     sbj_mesh = trimesh.load(sbj_file_path)
 
     # Define camera position and orientation
-    # camera_position = np.array([0, 1, 1.5])
-    # look_at = np.array([0, 1, 0])
-    # up_vector = np.array([0, -1, 0])
-
-    camera_position = np.array([0, 0.75, 1.5])
-    look_at = np.array([0, 0.75, 0])
+    camera_position = np.array([0, 1, 1.5])
+    look_at = np.array([0, 1, 0])
     up_vector = np.array([0, -1, 0])
 
     # Compute camera rotation matrix
@@ -120,8 +153,7 @@ def render_skeleton(obj_file_path, sbj_file_path, output_size=(1024, 1024)):
     # Project vertices to 2D
     # focal_length = 500  # Example focal length
     # image_size = (1024, 1024)
-    # focal_length = 443.41 * 2
-    focal_length = 443.41 * 2 * 2
+    focal_length = 443.41 * 2
     # image_size = (512, 512)
     image_size = output_size
     intrinsic_matrix = np.array([
@@ -145,14 +177,10 @@ def render_skeleton(obj_file_path, sbj_file_path, output_size=(1024, 1024)):
     model_path = "/home/datasets/arctic/data/body_models/smplx/SMPLX_NEUTRAL.pkl"
     with open(model_path, 'rb') as f:
         model_data = pickle.load(f, encoding='latin1')  # 必要に応じてエンコーディングを指定
-    # print(model_data.keys()) 
 
     regressor = model_data['J_regressor']
-    # print(regressor.shape)  # (24, 10475)
 
     joints = regressor @ sbj_mesh.vertices
-    # print(joints.shape)  # (24, 3) 
-
     vertices_camera = (rotation_matrix @ joints.T).T + camera_position
     vertices_2d = (intrinsic_matrix @ vertices_camera.T).T
     vertices_2d = vertices_2d[:, :2] / vertices_2d[:, 2:3]
@@ -168,54 +196,57 @@ def generate_depth_and_mask(obj_file_path, sbj_file_path, output_size=(1024, 102
     obj_mesh = trimesh.load(obj_file_path)
     sbj_mesh = trimesh.load(sbj_file_path)
 
-    # obj_mesh.visual.vertex_colors = np.array([[100, 100, 100, 255]] * len(obj_mesh.vertices))
-    # sbj_mesh.visual.vertex_colors = np.array([[150, 150, 150, 255]] * len(sbj_mesh.vertices))
-
-    obj_mesh.visual.vertex_colors = np.array([[0, 0, 128, 255]] * len(obj_mesh.vertices))
-    sbj_mesh.visual.vertex_colors = np.array([[128, 128, 128, 255]] * len(sbj_mesh.vertices))
-
+    # Extract MANO hand mesh
+    mano_mesh_left = extract_mano_from_smplx(sbj_mesh, "left")
+    mano_mesh_right = extract_mano_from_smplx(sbj_mesh, "right")
+    
+    # Color setup
+    # obj_mesh.visual.vertex_colors = np.array([[0, 0, 128, 255]] * len(obj_mesh.vertices))
+    obj_mesh.visual.vertex_colors = np.array([[51, 50, 153, 255]] * len(obj_mesh.vertices))
+    mano_mesh_left.visual.vertex_colors = np.array([[128, 128, 128, 255]] * len(mano_mesh_left.vertices))
+    mano_mesh_right.visual.vertex_colors = np.array([[128, 128, 128, 255]] * len(mano_mesh_right.vertices))
+    
     # Create PyRender scene
     scene = pyrender.Scene(bg_color=[0, 0, 0])
+    
+    # Add MANO hand mesh
+    mano_mesh_left_node = pyrender.Mesh.from_trimesh(mano_mesh_left, smooth=False)
+    scene.add(mano_mesh_left_node, name="mano_hand_left")
+
+    mano_mesh_right_node = pyrender.Mesh.from_trimesh(mano_mesh_right, smooth=False)
+    scene.add(mano_mesh_right_node, name="mano_hand_right")
 
     # Add object mesh
     obj_mesh_node = pyrender.Mesh.from_trimesh(obj_mesh, smooth=False)
     obj_node = scene.add(obj_mesh_node, name="object")
-
-    # Add subject (SMPLX) mesh
-    sbj_mesh_node = pyrender.Mesh.from_trimesh(sbj_mesh, smooth=False)
-    sbj_node = scene.add(sbj_mesh_node, name="subject")
-
+    
     # Setup camera
-    # camera = pyrender.PerspectiveCamera(yfov=np.pi / 3.0)
-    camera = pyrender.PerspectiveCamera(yfov=np.pi / 6.0)
+    camera = pyrender.PerspectiveCamera(yfov=np.pi / 3.0)
     camera_pose = np.eye(4)
-    # camera_pose[:3, 3] = [0, 1, 1.5]
-    camera_pose[:3, 3] = [0, 0.75, 1.5]
+    camera_pose[:3, 3] = [0, 1, 1.5]
 
     scene.add(camera, pose=camera_pose)
-
+    
     # Setup light
     light = pyrender.PointLight(color=np.ones(3), intensity=3.0)
     scene.add(light, pose=camera_pose)
-
+    
     # Render offscreen
     renderer = pyrender.OffscreenRenderer(*output_size)
     color, depth = renderer.render(scene, flags=pyrender.constants.RenderFlags.FLAT)
-
+    
     # Create segmentation image
     segmentation = color.copy()
-
-    print("min depth:", np.min(depth))
-    print("max depth:", np.max(depth))
-
-    # Create depth image
-    depth_valid = depth[depth > 0]
-    min_depth = np.min(depth_valid)
-    depth_normalized = (depth - min_depth) / (np.max(depth) - min_depth)
+    
+    min_depth, max_depth = depth_min_max(obj_file_path, sbj_file_path, output_size)
+    # print("min depth:", min_depth)
+    # print("max depth:", max_depth)
+    depth_normalized = (depth - min_depth) / (max_depth - min_depth)
     depth_image = np.where(depth > 0, (1 - depth_normalized) * 255, 0).astype(np.uint8)
-
+    
     # Create mask
     mask = np.where(depth > 0, 255, 0).astype(np.uint8)
+    
     return depth_image, segmentation, mask
 
 def resize_image(img, size=(512, 512)):
@@ -252,31 +283,17 @@ def center_crop(img, size=(512, 512)):
 
 # Main function
 def main():
-    # output_dir = Path("/home/datasets/fullbody_test_abc_10scenes_notsave")
-    output_dir = Path("/home/datasets/evaluation/arctic_fullbody/test")
+    output_dir = Path("/home/datasets/hand_test_abc_10scenes_HOI4D")
     output_dir.mkdir(parents=True, exist_ok=True)
     
     scene_num = 1
     paths_info = []
     prompts = ["A person is grasping something."]
-
-    # ply_root_dir = "/home/datasets/GOAL/results"
-    # object_list = ["apple_grasp", "binoculars_grasp", "camera_grasp"]
-    
-    #  /home/datasets/GOAL/results/MNet_terminal_old/static_and_motion_1/s1_apple_eat_1_static_meshes/0000_obj.ply
     ply_root_dir = Path("/home/datasets/GOAL_outputs/static")
-    # object_list = ["apple_grasp", "binoculars_grasp", "camera_grasp"]
-    # object_list = ply_root_dir.glob("*")
 
-
-    # object_listからoutputsを除外
-    # object_list = [obj for obj in object_list if obj.name != "outputs"]
     object_list = [obj.name for obj in ply_root_dir.iterdir() if obj.is_dir() and obj.name != "outputs"]
     print(object_list)
 
-    # output_dir = os.path.join(ply_root_dir, "outputs")
-    # os.makedirs(output_dir, exist_ok=True)
-    
     # 必要な出力フォルダを事前に作成
     sub_dirs = ["depth", "mask", "seg", "skeleton", "image"]
     for sub_dir in sub_dirs:
@@ -314,7 +331,7 @@ def main():
                 info = {
                     "image": str((output_dir / "image" / f"{file_name}_image_{i}_{sidx}.png").resolve()),
                     "top": 0, "bottom": 512, "left": 0, "right": 512,
-                    "sentence": f"A person is grasping {object_name}. " + scene_info[sidx],
+                    "sentence": f"A person is grasping {object_name}. " + scene_info[i],
                     "seg": str((output_dir / "seg" / f"{file_name}_seg_{i}_{sidx}.png").resolve()),
                     "mask": str((output_dir / "mask" / f"{file_name}_mask_{i}_{sidx}.png").resolve()),
                     "depth": str((output_dir / "depth" / f"{file_name}_depth_{i}_{sidx}.png").resolve()),
@@ -324,8 +341,6 @@ def main():
 
     
     # Save paths_info to a CSV file
-    
-    # csv_file_path = os.path.join(root_dir, "paths_info.csv")
     csv_file_path = os.path.join(output_dir, "paths_info.csv")
     with open(csv_file_path, mode='w', newline='', encoding='utf-8') as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames= ["image", "top", "bottom", "left", "right", "sentence", "seg", "mask", "depth", "skeleton"])

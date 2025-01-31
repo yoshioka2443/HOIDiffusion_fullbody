@@ -11,20 +11,8 @@ import math
 
 from tqdm import tqdm
 import csv
+
 from pathlib import Path
-
-
-# A serene beach at sunset.
-# A bustling cityscape at night.
-# A tranquil forest with a winding river.
-# A snow-covered mountain range.
-# A vibrant desert oasis.
-# An idyllic countryside with rolling hills.
-# A futuristic sci-fi cityscape.
-# A tropical island paradise.
-# A foggy, mysterious swamp.
-# A rocky, barren lunar landscape.
-scene_info = ["A serene beach at sunset.", "A bustling cityscape at night.", "A tranquil forest with a winding river.", "A snow-covered mountain range.", "A vibrant desert oasis.", "An idyllic countryside with rolling hills.", "A futuristic sci-fi cityscape.", "A tropical island paradise.", "A foggy, mysterious swamp.", "A rocky, barren lunar landscape."]
 
 LIMBS = [ (0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (3, 6), (4, 7), (5, 8), (6, 9), (7, 10), (8, 11), (9, 12), (12, 13), (12, 14), (12, 15), (13, 16), (14, 17), (16, 18), (17, 19), (18, 20), (19, 21), (15, 22), (15, 23), (15, 24)]
 LEFT_HAND_LIMBS = [ (20, 25), (25, 26), (26, 27), (20, 28), (28, 29), (29, 30), (20, 31), (31, 32), (32, 33), (20, 34), (34, 35), (35, 36), (20, 37), (37, 38), (38, 39)]
@@ -101,12 +89,8 @@ def render_skeleton(obj_file_path, sbj_file_path, output_size=(1024, 1024)):
     sbj_mesh = trimesh.load(sbj_file_path)
 
     # Define camera position and orientation
-    # camera_position = np.array([0, 1, 1.5])
-    # look_at = np.array([0, 1, 0])
-    # up_vector = np.array([0, -1, 0])
-
-    camera_position = np.array([0, 0.75, 1.5])
-    look_at = np.array([0, 0.75, 0])
+    camera_position = np.array([0, 1, 1.5])
+    look_at = np.array([0, 1, 0])
     up_vector = np.array([0, -1, 0])
 
     # Compute camera rotation matrix
@@ -120,8 +104,7 @@ def render_skeleton(obj_file_path, sbj_file_path, output_size=(1024, 1024)):
     # Project vertices to 2D
     # focal_length = 500  # Example focal length
     # image_size = (1024, 1024)
-    # focal_length = 443.41 * 2
-    focal_length = 443.41 * 2 * 2
+    focal_length = 443.41 * 2
     # image_size = (512, 512)
     image_size = output_size
     intrinsic_matrix = np.array([
@@ -186,11 +169,9 @@ def generate_depth_and_mask(obj_file_path, sbj_file_path, output_size=(1024, 102
     sbj_node = scene.add(sbj_mesh_node, name="subject")
 
     # Setup camera
-    # camera = pyrender.PerspectiveCamera(yfov=np.pi / 3.0)
-    camera = pyrender.PerspectiveCamera(yfov=np.pi / 6.0)
+    camera = pyrender.PerspectiveCamera(yfov=np.pi / 3.0)
     camera_pose = np.eye(4)
-    # camera_pose[:3, 3] = [0, 1, 1.5]
-    camera_pose[:3, 3] = [0, 0.75, 1.5]
+    camera_pose[:3, 3] = [0, 1, 1.5]
 
     scene.add(camera, pose=camera_pose)
 
@@ -204,9 +185,6 @@ def generate_depth_and_mask(obj_file_path, sbj_file_path, output_size=(1024, 102
 
     # Create segmentation image
     segmentation = color.copy()
-
-    print("min depth:", np.min(depth))
-    print("max depth:", np.max(depth))
 
     # Create depth image
     depth_valid = depth[depth > 0]
@@ -252,9 +230,11 @@ def center_crop(img, size=(512, 512)):
 
 # Main function
 def main():
-    # output_dir = Path("/home/datasets/fullbody_test_abc_10scenes_notsave")
-    output_dir = Path("/home/datasets/evaluation/arctic_fullbody/test")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # root_dir = "/home/datasets/fullbody_test_goal_abc"
+    # os.makedirs(root_dir, exist_ok=True)
+    output_dir = Path("/home/datasets/fullbody_test_goal_abc")
+    os.makedirs(output_dir, exist_ok=True)
+
     
     scene_num = 1
     paths_info = []
@@ -266,12 +246,10 @@ def main():
     #  /home/datasets/GOAL/results/MNet_terminal_old/static_and_motion_1/s1_apple_eat_1_static_meshes/0000_obj.ply
     ply_root_dir = Path("/home/datasets/GOAL_outputs/static")
     # object_list = ["apple_grasp", "binoculars_grasp", "camera_grasp"]
-    # object_list = ply_root_dir.glob("*")
-
+    object_list = ply_root_dir.glob("*")
 
     # object_listからoutputsを除外
-    # object_list = [obj for obj in object_list if obj.name != "outputs"]
-    object_list = [obj.name for obj in ply_root_dir.iterdir() if obj.is_dir() and obj.name != "outputs"]
+    object_list = [obj for obj in object_list if obj.name != "outputs"]
     print(object_list)
 
     # output_dir = os.path.join(ply_root_dir, "outputs")
@@ -283,17 +261,19 @@ def main():
         (output_dir / sub_dir).mkdir(exist_ok=True)
    
 
-    for sidx in tqdm(range(len(scene_info))):
-        for object_file_name in tqdm(object_list):
+    for prompt in tqdm(prompts):
+        for object_name in tqdm(object_list):
             for i in tqdm(range(scene_num)):
-                obj_file_path = os.path.join(ply_root_dir, object_file_name, f"{i:04d}_obj.ply")
-                sbj_file_path = os.path.join(ply_root_dir, object_file_name, f"{i:04d}_sbj_refine.ply")
-                file_name = f"{object_file_name}_{i:04d}"
-                # object_name = obj_file_path.split("/")[-1].split("_")[1]
-                object_name = object_file_name.split("_")[1]
-                print(object_name)
+                obj_file_path = os.path.join(ply_root_dir, object_name, f"{i:04d}_obj.ply")
+                sbj_file_path = os.path.join(ply_root_dir, object_name, f"{i:04d}_sbj_refine.ply")
+                file_name = f"{object_name}_{i:04d}"
                 depth, mask, seg = generate_depth_and_mask(obj_file_path, sbj_file_path)
                 skeleton = render_skeleton(obj_file_path, sbj_file_path)
+
+                # mask = center_crop(mask, (256, 256))
+                # seg = center_crop(seg, (256, 256))
+                # depth = center_crop(depth, (256, 256))
+                # skeleton = center_crop(skeleton, (256, 256))
 
                 mask = center_crop(mask, (512, 512))
                 seg = center_crop(seg, (512, 512))
@@ -305,20 +285,62 @@ def main():
                 depth = resize_image(depth, (512, 512))
                 skeleton = resize_image(skeleton, (512, 512))
 
+                # save
+                # depth_path = os.path.join(root_dir, file_name + "_depth.png")
+                # mask_path = os.path.join(root_dir, file_name + "_mask.png")
+                # seg_path = os.path.join(root_dir, file_name + "_seg.png")
+                # skeleton_path = os.path.join(root_dir, file_name + "_skeleton.png")
+                # image_path = os.path.join(root_dir, file_name + "_image.png")
+
+                # depth_path = root_dir + file_name + "_depth.png"
+                # mask_path = root_dir + file_name + "_mask.png"
+                # seg_path = root_dir + file_name + "_seg.png"
+                # skeleton_path = root_dir + file_name + "_skeleton.png"
+                # image_path = root_dir + file_name + "_image.png"
+                # print(output_dir)
+                # depth_dir = os.path.join(output_dir, "depth")
+                # depth_path = os.path.join(depth_dir, file_name + "_depth.png")
+                # mask_dir = os.path.join(output_dir, "mask")
+                # mask_path = os.path.join(mask_dir, file_name + "_mask.png")
+                # seg_dir = os.path.join(output_dir, "seg")
+                # seg_path = os.path.join(seg_dir, file_name + "_seg.png")
+                # skeleton_dir = os.path.join(output_dir, "skeleton")
+                # skeleton_path = os.path.join(skeleton_dir, file_name + "_skeleton.png")
+                # image_dir = os.path.join(output_dir, "image")
+                # image_path = os.path.join(image_dir, file_name + "_image.png")
                 # 保存
-                cv2.imwrite(str(output_dir / "depth" / f"{file_name}_depth_{i}_{sidx}.png"), depth)
-                cv2.imwrite(str(output_dir / "mask" / f"{file_name}_mask_{i}_{sidx}.png"), mask)
-                cv2.imwrite(str(output_dir / "seg" / f"{file_name}_seg_{i}_{sidx}.png"), seg)
-                cv2.imwrite(str(output_dir / "skeleton" / f"{file_name}_skeleton_{i}_{sidx}.png"), skeleton)
-                cv2.imwrite(str(output_dir / "image" / f"{file_name}_image_{i}_{sidx}.png"), mask)
+                cv2.imwrite(str(output_dir / "depth" / f"{file_name}_depth.png"), depth)
+                cv2.imwrite(str(output_dir / "mask" / f"{file_name}_mask.png"), mask)
+                cv2.imwrite(str(output_dir / "seg" / f"{file_name}_seg.png"), seg)
+                cv2.imwrite(str(output_dir / "skeleton" / f"{file_name}_skeleton.png"), skeleton)
+                cv2.imwrite(str(output_dir / "image" / f"{file_name}_image.png"), mask)
+
+                # cv2.imwrite(depth_path, depth)
+                # cv2.imwrite(mask_path, mask)
+                # cv2.imwrite(seg_path, seg)
+                # cv2.imwrite(skeleton_path, skeleton)
+                # cv2.imwrite(image_path, mask)
+
+                # info = {
+                #     "image": os.path.abspath(image_path),
+                #     "top": 0,
+                #     "bottom": 512,
+                #     "left": 0,
+                #     "right": 512,
+                #     "sentence": prompt,
+                #     "seg": os.path.abspath(seg_path),
+                #     "mask": os.path.abspath(mask_path),
+                #     "depth": os.path.abspath(depth_path),
+                #     "skeleton": os.path.abspath(skeleton_path)
+                # }
                 info = {
-                    "image": str((output_dir / "image" / f"{file_name}_image_{i}_{sidx}.png").resolve()),
+                    "image": str((output_dir / "image" / f"{file_name}_image.png").resolve()),
                     "top": 0, "bottom": 512, "left": 0, "right": 512,
-                    "sentence": f"A person is grasping {object_name}. " + scene_info[sidx],
-                    "seg": str((output_dir / "seg" / f"{file_name}_seg_{i}_{sidx}.png").resolve()),
-                    "mask": str((output_dir / "mask" / f"{file_name}_mask_{i}_{sidx}.png").resolve()),
-                    "depth": str((output_dir / "depth" / f"{file_name}_depth_{i}_{sidx}.png").resolve()),
-                    "skeleton": str((output_dir / "skeleton" / f"{file_name}_skeleton_{i}_{sidx}.png").resolve())
+                    "sentence": prompt,
+                    "seg": str((output_dir / "seg" / f"{file_name}_seg.png").resolve()),
+                    "mask": str((output_dir / "mask" / f"{file_name}_mask.png").resolve()),
+                    "depth": str((output_dir / "depth" / f"{file_name}_depth.png").resolve()),
+                    "skeleton": str((output_dir / "skeleton" / f"{file_name}_skeleton.png").resolve())
                 }
                 paths_info.append(info)
 

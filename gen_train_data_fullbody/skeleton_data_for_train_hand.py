@@ -137,9 +137,10 @@ def draw_skeleton_for_train(image, joints_2d=None):
                                     int(deg),
                                     0, 360, 1)
         if limb_num < 24:
-            color_num = 4
-            color_code_num = (limb_num // color_num)
-            limb_color = [c + 35 * (limb_num % color_num) for c in joint_color_code[color_code_num]]
+            # color_num = 4
+            # color_code_num = (limb_num // color_num)
+            # limb_color = [c + 35 * (limb_num % color_num) for c in joint_color_code[color_code_num]]
+            continue
         elif limb_num < 39:
             color_num = 3
             color_code_num = ((limb_num - 24) // color_num)
@@ -242,14 +243,14 @@ def main(
 if __name__ == '__main__':
     from pathlib import Path
     data_dir = Path("/home/datasets/arctic/data/arctic_data/data")
-    output_dir = Path("/home/datasets/train_fullbody_goal_skeleton_10")
+    # output_dir = Path("/home/datasets/train_fullbody_goal_skeleton_10")
+    output_dir = Path("/home/datasets/train_hand_goal_skeleton_10")
     os.makedirs(output_dir, exist_ok=True)
 
     # num = 0
     # image_num = 30
     frame_sequence = 10
-    dirpath_for_loop = "/home/datasets/arctic/render_out"
-    # dirpath_for_loop = "/home/datasets/arctic/render_out_fullbody"
+    dirpath_for_loop = "/home/datasets/arctic/render_out_fullbody"
     scene_list = os.listdir(dirpath_for_loop)
 
     image_num = 0

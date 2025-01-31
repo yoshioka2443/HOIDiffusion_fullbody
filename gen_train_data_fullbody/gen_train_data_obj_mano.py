@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import pathlib
 
 
+
+
 # 処理内容を定義
 def original_image_to_crop(img, original_dims):
     """
@@ -66,11 +68,14 @@ def edit_mask_color(mask_image):
     # sbj_replacement_color = [128, 128, 128]
     obj_target_color = (100, 100, 100)
     obj_replacement_color = (128, 0, 0)
-    sbj_target_color = (150, 150, 150)
+    # sbj_target_color = (150, 150, 150)
+    sbj_target_color1= (250, 250, 250) # right hand
+    sbj_target_color2 = (200, 200, 200) # left hand
     sbj_replacement_color = (128, 128, 128)
     edited_image = mask_image.copy()
     edited_image = edit_color(edited_image, obj_target_color, obj_replacement_color)
-    edited_image = edit_color(edited_image, sbj_target_color, sbj_replacement_color)
+    edited_image = edit_color(edited_image, sbj_target_color1, sbj_replacement_color)
+    edited_image = edit_color(edited_image, sbj_target_color2, sbj_replacement_color)
     return edited_image
 
 def edit_color(img, target_color, replacement_color):
@@ -171,12 +176,8 @@ def visualize_comparison(original_img, restored_img):
 
 # 処理内容を定義
 def main():
-    input_dir = "/home/datasets/arctic/render_out"
-    # skeleton_input_dir = "/home/datasets/train_fullbody_goal_skeleton"
-    # output_dir = os.path.join("/home/datasets", "fullbody_train_goal")
-    # skeleton_input_dir = "/home/datasets/train_fullbody_goal_skeleton_10"
+    input_dir = "/home/datasets/arctic/render_out_mano50"
     skeleton_input_dir = "/home/datasets/train_hand_goal_skeleton_10"
-    # output_dir = os.path.join("/home/datasets", "fullbody_train_50_edit_maskcolor")
     output_dir = os.path.join("/home/datasets", "hand_train_50_edit_maskcolor")
     os.makedirs(output_dir, exist_ok=True)
 
